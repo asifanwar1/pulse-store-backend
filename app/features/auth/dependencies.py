@@ -25,7 +25,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except (ValueError, TypeError):
         raise UnauthorizedException()
     user = db.query(User).filter(User.id == uid).first()
-    if not user or not user.is_active:
+    if not user or not user.is_active or not user.is_verified:
         raise UnauthorizedException()
     return user
 

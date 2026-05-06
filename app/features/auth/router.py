@@ -51,7 +51,8 @@ def token_login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(refresh_data: RefreshRequest, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def refresh(request: Request, refresh_data: RefreshRequest, db: Session = Depends(get_db)):
     return service.refresh_tokens(db, refresh_data.refresh_token)
 
 

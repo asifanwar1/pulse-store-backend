@@ -1,6 +1,8 @@
 import hashlib
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from jose import JWTError
 from app.config import settings
@@ -15,6 +17,8 @@ from app.features.auth.models import OTPCode
 
 _OTP_PURPOSE_VERIFY = "verify_email"
 _OTP_PURPOSE_RESET = "reset_password"
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +58,7 @@ def _create_otp(db: Session, email: str, purpose: str) -> str:
 
 
 def _verify_otp(db: Session, email: str, code: str, purpose: str) -> OTPCode:
+    now = datetime.now(timezone.utc)
     otp = (
         db.query(OTPCode)
         .filter(
@@ -61,14 +66,13 @@ def _verify_otp(db: Session, email: str, code: str, purpose: str) -> OTPCode:
             OTPCode.code == _hash_otp(code),
             OTPCode.purpose == purpose,
             OTPCode.is_used == False,
+            OTPCode.expires_at > now,
         )
         .order_by(OTPCode.created_at.desc())
         .first()
     )
     if not otp:
-        raise BadRequestException("Invalid OTP code")
-    if datetime.now(timezone.utc) > otp.expires_at:
-        raise BadRequestException("OTP code has expired")
+        raise BadRequestException("Invalid or expired OTP code")
     otp.is_used = True
     db.commit()
     return otp
@@ -100,11 +104,17 @@ def register(db: Session, email: str, username: str, password: str) -> dict:
         is_verified=False,
     )
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        code = _create_otp(db, email, _OTP_PURPOSE_VERIFY)
+    except IntegrityError:
+        db.rollback()
+        raise ConflictException("An account with this email or username already exists")
 
-    code = _create_otp(db, email, _OTP_PURPOSE_VERIFY)
-    send_otp_email(email, code, _OTP_PURPOSE_VERIFY)
+    try:
+        send_otp_email(email, code, _OTP_PURPOSE_VERIFY)
+    except Exception:
+        logger.error("Failed to send verification email to %s", email, exc_info=True)
+
     return {"message": f"Account created. A verification code has been sent to {email}."}
 
 
@@ -132,7 +142,10 @@ def resend_verification_otp(db: Session, email: str) -> dict:
         raise BadRequestException("Email is already verified")
 
     code = _create_otp(db, email, _OTP_PURPOSE_VERIFY)
-    send_otp_email(email, code, _OTP_PURPOSE_VERIFY)
+    try:
+        send_otp_email(email, code, _OTP_PURPOSE_VERIFY)
+    except Exception:
+        logger.error("Failed to send verification email to %s", email, exc_info=True)
     return {"message": f"A new verification code has been sent to {email}."}
 
 
@@ -179,7 +192,10 @@ def forgot_password(db: Session, email: str) -> dict:
     user = db.query(User).filter(User.email == email).first()
     if user and user.is_verified:
         code = _create_otp(db, email, _OTP_PURPOSE_RESET)
-        send_otp_email(email, code, _OTP_PURPOSE_RESET)
+        try:
+            send_otp_email(email, code, _OTP_PURPOSE_RESET)
+        except Exception:
+            logger.error("Failed to send password reset email to %s", email, exc_info=True)
     return {"message": "If an account with that email exists, a reset code has been sent."}
 
 
