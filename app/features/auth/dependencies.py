@@ -13,12 +13,18 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     try:
         payload = decode_token(token)
+        if payload.get("type") != "access":
+            raise UnauthorizedException()
         user_id = payload.get("sub")
         if user_id is None:
             raise UnauthorizedException()
     except JWTError:
         raise UnauthorizedException()
-    user = db.query(User).filter(User.id == int(user_id)).first()
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        raise UnauthorizedException()
+    user = db.query(User).filter(User.id == uid).first()
     if not user or not user.is_active:
         raise UnauthorizedException()
     return user

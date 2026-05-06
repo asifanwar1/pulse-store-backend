@@ -1,5 +1,5 @@
-import random
-import string
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from jose import JWTError
@@ -22,10 +22,16 @@ _OTP_PURPOSE_RESET = "reset_password"
 # ---------------------------------------------------------------------------
 
 def _generate_otp() -> str:
-    return "".join(random.choices(string.digits, k=6))
+    return "".join(secrets.choice("0123456789") for _ in range(6))
+
+
+def _hash_otp(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
 
 
 def _create_otp(db: Session, email: str, purpose: str) -> str:
+    now = datetime.now(timezone.utc)
+
     # Invalidate any previous unused OTPs for the same email + purpose
     db.query(OTPCode).filter(
         OTPCode.email == email,
@@ -33,12 +39,18 @@ def _create_otp(db: Session, email: str, purpose: str) -> str:
         OTPCode.is_used == False,
     ).update({"is_used": True})
 
+    # Remove expired records for this email to keep the table lean
+    db.query(OTPCode).filter(
+        OTPCode.email == email,
+        OTPCode.expires_at < now,
+    ).delete()
+
     code = _generate_otp()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
-    otp = OTPCode(email=email, code=code, purpose=purpose, expires_at=expires_at)
+    expires_at = now + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
+    otp = OTPCode(email=email, code=_hash_otp(code), purpose=purpose, expires_at=expires_at)
     db.add(otp)
     db.commit()
-    return code
+    return code  # return plaintext so it can be emailed
 
 
 def _verify_otp(db: Session, email: str, code: str, purpose: str) -> OTPCode:
@@ -46,7 +58,7 @@ def _verify_otp(db: Session, email: str, code: str, purpose: str) -> OTPCode:
         db.query(OTPCode)
         .filter(
             OTPCode.email == email,
-            OTPCode.code == code,
+            OTPCode.code == _hash_otp(code),
             OTPCode.purpose == purpose,
             OTPCode.is_used == False,
         )
@@ -135,7 +147,7 @@ def login(db: Session, email: str, password: str) -> dict:
     return _token_pair(user)
 
 
-def refresh_tokens(refresh_token: str) -> dict:
+def refresh_tokens(db: Session, refresh_token: str) -> dict:
     try:
         payload = decode_token(refresh_token)
         if payload.get("type") != "refresh":
@@ -145,9 +157,21 @@ def refresh_tokens(refresh_token: str) -> dict:
             raise UnauthorizedException()
     except JWTError:
         raise UnauthorizedException("Invalid refresh token")
-    access_token = create_access_token({"sub": user_id})
-    new_refresh_token = create_refresh_token({"sub": user_id})
-    return {"access_token": access_token, "refresh_token": new_refresh_token, "token_type": "bearer"}
+
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        raise UnauthorizedException()
+
+    user = db.query(User).filter(User.id == uid).first()
+    if not user or not user.is_active:
+        raise UnauthorizedException("Account not found or is inactive")
+
+    return {
+        "access_token": create_access_token({"sub": str(user.id)}),
+        "refresh_token": create_refresh_token({"sub": str(user.id)}),
+        "token_type": "bearer",
+    }
 
 
 def forgot_password(db: Session, email: str) -> dict:
@@ -160,11 +184,14 @@ def forgot_password(db: Session, email: str) -> dict:
 
 
 def reset_password(db: Session, email: str, code: str, new_password: str) -> dict:
+    # Verify OTP before looking up the user — prevents email enumeration:
+    # a non-existent email has no OTP on record, so the error is identical
+    # to a wrong OTP on a valid email ("Invalid OTP code").
+    _verify_otp(db, email, code, _OTP_PURPOSE_RESET)
+
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise BadRequestException("Invalid request")
-
-    _verify_otp(db, email, code, _OTP_PURPOSE_RESET)
 
     user.hashed_password = hash_password(new_password)
     db.commit()
