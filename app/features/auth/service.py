@@ -95,15 +95,15 @@ def _token_pair(user: User) -> dict:
 # Public service functions
 # ---------------------------------------------------------------------------
 
-def register(db: Session, email: str, username: str, password: str) -> dict:
+def register(db: Session, email: str, full_name: str, password: str, phone_number: str | None = None, user_type: str = "customer") -> dict:
     if db.query(User).filter(User.email == email).first():
         raise ConflictException("An account with this email already exists")
-    if db.query(User).filter(User.username == username).first():
-        raise ConflictException("Username is already taken")
 
     user = User(
         email=email,
-        username=username,
+        full_name=full_name,
+        phone_number=phone_number,
+        user_type=user_type,
         hashed_password=hash_password(password),
         is_active=False,
         is_verified=False,
@@ -115,7 +115,7 @@ def register(db: Session, email: str, username: str, password: str) -> dict:
     except IntegrityError:
         db.rollback()
         raise ConflictException(
-            "An account with this email or username already exists")
+            "An account with this email already exists")
 
     try:
         send_otp_email(email, code, _OTP_PURPOSE_VERIFY)

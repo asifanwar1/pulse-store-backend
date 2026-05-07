@@ -17,7 +17,7 @@ router = APIRouter()
 @router.post("/register", response_model=MessageResponse, status_code=201)
 @limiter.limit("5/minute")
 def register(request: Request, data: RegisterRequest, db: Session = Depends(get_db)):
-    return service.register(db, data.email, data.username, data.password)
+    return service.register(db, data.email, data.full_name, data.password, data.phone_number, data.user_type)
 
 
 @router.post("/verify-email", response_model=TokenResponse)

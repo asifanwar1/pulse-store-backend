@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from slowapi import _rate_limit_exceeded_handler
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from app.core.limiter import limiter
@@ -12,6 +13,14 @@ from app.features.cart.router import router as cart_router
 
 app = FastAPI(title="Pulse Store API", version="1.0.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Rate-limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -19,8 +28,10 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(users_router, prefix="/api/v1/users", tags=["Users"])
-app.include_router(categories_router, prefix="/api/v1/categories", tags=["Categories"])
-app.include_router(products_router, prefix="/api/v1/products", tags=["Products"])
+app.include_router(categories_router,
+                   prefix="/api/v1/categories", tags=["Categories"])
+app.include_router(
+    products_router, prefix="/api/v1/products", tags=["Products"])
 app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
 
