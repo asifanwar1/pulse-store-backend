@@ -7,7 +7,7 @@ from app.core.security import decode_token
 from app.core.exceptions import UnauthorizedException, ForbiddenException
 from app.features.users.models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:

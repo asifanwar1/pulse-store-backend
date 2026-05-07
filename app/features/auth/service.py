@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -30,7 +31,9 @@ def _generate_otp() -> str:
 
 
 def _hash_otp(code: str) -> str:
-    return hashlib.sha256(code.encode()).hexdigest()
+    return hmac.new(
+        settings.SECRET_KEY.encode(), code.encode(), "sha256"
+    ).hexdigest()
 
 
 def _create_otp(db: Session, email: str, purpose: str) -> str:
@@ -46,12 +49,14 @@ def _create_otp(db: Session, email: str, purpose: str) -> str:
     # Remove expired records for this email to keep the table lean
     db.query(OTPCode).filter(
         OTPCode.email == email,
+        OTPCode.purpose == purpose,
         OTPCode.expires_at < now,
     ).delete()
 
     code = _generate_otp()
     expires_at = now + timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
-    otp = OTPCode(email=email, code=_hash_otp(code), purpose=purpose, expires_at=expires_at)
+    otp = OTPCode(email=email, code=_hash_otp(code),
+                  purpose=purpose, expires_at=expires_at)
     db.add(otp)
     db.commit()
     return code  # return plaintext so it can be emailed
@@ -104,29 +109,29 @@ def register(db: Session, email: str, username: str, password: str) -> dict:
         is_verified=False,
     )
     db.add(user)
+    db.flush()
     try:
         code = _create_otp(db, email, _OTP_PURPOSE_VERIFY)
     except IntegrityError:
         db.rollback()
-        raise ConflictException("An account with this email or username already exists")
+        raise ConflictException(
+            "An account with this email or username already exists")
 
     try:
         send_otp_email(email, code, _OTP_PURPOSE_VERIFY)
     except Exception:
-        logger.error("Failed to send verification email to %s", email, exc_info=True)
+        logger.error("Failed to send verification email to %s",
+                     email, exc_info=True)
 
     return {"message": f"Account created. A verification code has been sent to {email}."}
 
 
 def verify_email(db: Session, email: str, code: str) -> dict:
     user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise BadRequestException("No account found with this email")
-    if user.is_verified:
-        raise BadRequestException("Email is already verified")
-
+    if not user or user.is_verified:
+        # Silently succeed — don't reveal registration status
+        raise BadRequestException("Invalid or expired OTP code")
     _verify_otp(db, email, code, _OTP_PURPOSE_VERIFY)
-
     user.is_verified = True
     user.is_active = True
     db.commit()
@@ -136,17 +141,15 @@ def verify_email(db: Session, email: str, code: str) -> dict:
 
 def resend_verification_otp(db: Session, email: str) -> dict:
     user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise BadRequestException("No account found with this email")
-    if user.is_verified:
-        raise BadRequestException("Email is already verified")
-
-    code = _create_otp(db, email, _OTP_PURPOSE_VERIFY)
-    try:
-        send_otp_email(email, code, _OTP_PURPOSE_VERIFY)
-    except Exception:
-        logger.error("Failed to send verification email to %s", email, exc_info=True)
-    return {"message": f"A new verification code has been sent to {email}."}
+    if user and not user.is_verified:
+        code = _create_otp(db, email, _OTP_PURPOSE_VERIFY)
+        try:
+            send_otp_email(email, code, _OTP_PURPOSE_VERIFY)
+        except Exception:
+            logger.error("Failed to send verification email to %s",
+                         email, exc_info=True)
+    # Always return the same message
+    return {"message": "If your email is registered and unverified, a new code has been sent."}
 
 
 def login(db: Session, email: str, password: str) -> dict:
@@ -154,7 +157,8 @@ def login(db: Session, email: str, password: str) -> dict:
     if not user or not verify_password(password, user.hashed_password):
         raise UnauthorizedException("Invalid email or password")
     if not user.is_verified:
-        raise UnauthorizedException("Please verify your email before logging in")
+        raise UnauthorizedException(
+            "Please verify your email before logging in")
     if not user.is_active:
         raise UnauthorizedException("Account is inactive")
     return _token_pair(user)
@@ -177,7 +181,7 @@ def refresh_tokens(db: Session, refresh_token: str) -> dict:
         raise UnauthorizedException()
 
     user = db.query(User).filter(User.id == uid).first()
-    if not user or not user.is_active:
+    if not user or not user.is_active or not user.is_verified:
         raise UnauthorizedException("Account not found or is inactive")
 
     return {
@@ -195,7 +199,8 @@ def forgot_password(db: Session, email: str) -> dict:
         try:
             send_otp_email(email, code, _OTP_PURPOSE_RESET)
         except Exception:
-            logger.error("Failed to send password reset email to %s", email, exc_info=True)
+            logger.error("Failed to send password reset email to %s",
+                         email, exc_info=True)
     return {"message": "If an account with that email exists, a reset code has been sent."}
 
 

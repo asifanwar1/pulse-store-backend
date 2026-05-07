@@ -33,7 +33,7 @@ def resend_otp(request: Request, data: ResendOTPRequest, db: Session = Depends(g
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("10/minute")
+@limiter.limit("10/minute", key_func=lambda req: req.client.host + ":login_attempt")
 def login(request: Request, login_data: LoginRequest, db: Session = Depends(get_db)):
     return service.login(db, login_data.email, login_data.password)
 
@@ -41,7 +41,7 @@ def login(request: Request, login_data: LoginRequest, db: Session = Depends(get_
 # OAuth2 form-based endpoint so Swagger UI "Authorize" works correctly.
 # username field maps to email per OAuth2 convention.
 @router.post("/token", response_model=TokenResponse, include_in_schema=False)
-@limiter.limit("10/minute")
+@limiter.limit("10/minute", key_func=lambda req: req.client.host + ":login_attempt")
 def token_login(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),

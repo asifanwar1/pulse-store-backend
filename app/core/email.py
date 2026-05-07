@@ -53,7 +53,7 @@ def send_otp_email(to_email: str, otp_code: str, purpose: str) -> None:
 
     msg = _build_otp_message(to_email, subject, heading, body)
 
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
+    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
         server.ehlo()
         server.starttls()
         server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
