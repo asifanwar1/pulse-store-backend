@@ -2,6 +2,13 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+from enum import Enum as PyEnum
+
+
+class UserType(PyEnum):
+    CUSTOMER = "CUSTOMER"
+    ADMIN = "ADMIN"
+    VENDOR = "VENDOR"
 
 
 class User(Base):
@@ -11,7 +18,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     phone_number = Column(String, nullable=True)
-    user_type = Column(String, nullable=False, default="customer")
+    user_type = Column(String, nullable=False, default=UserType.CUSTOMER)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)

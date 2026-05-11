@@ -1,13 +1,20 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from enum import Enum
+
+
+class UserType(str, Enum):
+    CUSTOMER = "CUSTOMER"
+    ADMIN = "ADMIN"
+    VENDOR = "VENDOR"
 
 
 class UserBase(BaseModel):
     email: str
     full_name: str
     phone_number: Optional[str] = None
-    user_type: str = "customer"
+    user_type: UserType = UserType.CUSTOMER
 
 
 class UserCreate(UserBase):
