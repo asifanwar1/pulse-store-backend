@@ -204,3 +204,7 @@ def reset_password(db: Session, email: str, code: str, new_password: str) -> dic
     user.hashed_password = hash_password(new_password)
     db.commit()
     return {"message": "Password has been reset successfully. You can now log in."}
+
+
+def logout() -> dict:
+    return {"message": "Logged out successfully"}

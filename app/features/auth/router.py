@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.limiter import limiter, login_rate_limit_key
 from app.dependencies import get_db
 from app.features.auth import service
+from app.features.auth.dependencies import get_current_user
 from app.features.auth.schemas import (
     LoginRequest, TokenResponse, RefreshRequest,
     RegisterRequest, MessageResponse,
@@ -54,6 +55,12 @@ def token_login(
 @limiter.limit("10/minute")
 def refresh(request: Request, refresh_data: RefreshRequest, db: Session = Depends(get_db)):
     return service.refresh_tokens(db, refresh_data.refresh_token)
+
+
+@router.post("/logout", response_model=MessageResponse)
+@limiter.limit("20/minute")
+def logout(request: Request, _=Depends(get_current_user)):
+    return service.logout()
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
