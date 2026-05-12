@@ -192,9 +192,6 @@ def forgot_password(db: Session, email: str) -> dict:
 
 
 def reset_password(db: Session, email: str, code: str, new_password: str) -> dict:
-    # Verify OTP before looking up the user — prevents email enumeration:
-    # a non-existent email has no OTP on record, so the error is identical
-    # to a wrong OTP on a valid email ("Invalid OTP code").
     _verify_otp(db, email, code, _OTP_PURPOSE_RESET)
 
     user = db.query(User).filter(User.email == email).first()
