@@ -7,3 +7,9 @@ from slowapi.util import get_remote_address
 #   app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 #   app.add_middleware(SlowAPIMiddleware)
 limiter = Limiter(key_func=get_remote_address)
+
+
+def login_rate_limit_key(request) -> str:
+    # slowapi inspects the parameter name and only passes the request
+    # automatically when it is named "request".
+    return f"{request.client.host}:login_attempt"
