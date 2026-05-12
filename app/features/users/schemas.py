@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 from enum import Enum
@@ -11,10 +11,12 @@ class UserType(str, Enum):
 
 
 class UserBase(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     email: str
-    full_name: str
-    phone_number: Optional[str] = None
-    user_type: UserType = UserType.CUSTOMER
+    full_name: str = Field(alias="fullName")
+    phone_number: Optional[str] = Field(default=None, alias="phoneNumber")
+    user_type: UserType = Field(default=UserType.CUSTOMER, alias="userType")
 
 
 class UserCreate(UserBase):
@@ -22,17 +24,19 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     email: Optional[str] = None
-    full_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    user_type: Optional[str] = None
+    full_name: Optional[str] = Field(default=None, alias="fullName")
+    phone_number: Optional[str] = Field(default=None, alias="phoneNumber")
+    user_type: Optional[str] = Field(default=None, alias="userType")
     password: Optional[str] = None
 
 
 class UserResponse(UserBase):
     id: int
-    is_active: bool
-    is_admin: bool
-    created_at: datetime
+    is_active: bool = Field(alias="isActive")
+    is_admin: bool = Field(alias="isAdmin")
+    created_at: datetime = Field(alias="createdAt")
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)

@@ -22,10 +22,6 @@ _OTP_PURPOSE_RESET = "reset_password"
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _generate_otp() -> str:
     return "".join(secrets.choice("0123456789") for _ in range(6))
 
@@ -39,14 +35,12 @@ def _hash_otp(code: str) -> str:
 def _create_otp(db: Session, email: str, purpose: str) -> str:
     now = datetime.now(timezone.utc)
 
-    # Invalidate any previous unused OTPs for the same email + purpose
     db.query(OTPCode).filter(
         OTPCode.email == email,
         OTPCode.purpose == purpose,
         OTPCode.is_used == False,
     ).update({"is_used": True})
 
-    # Remove expired records for this email to keep the table lean
     db.query(OTPCode).filter(
         OTPCode.email == email,
         OTPCode.purpose == purpose,
@@ -59,7 +53,7 @@ def _create_otp(db: Session, email: str, purpose: str) -> str:
                   purpose=purpose, expires_at=expires_at)
     db.add(otp)
     db.commit()
-    return code  # return plaintext so it can be emailed
+    return code
 
 
 def _verify_otp(db: Session, email: str, code: str, purpose: str) -> OTPCode:
@@ -85,15 +79,11 @@ def _verify_otp(db: Session, email: str, code: str, purpose: str) -> OTPCode:
 
 def _token_pair(user: User) -> dict:
     return {
-        "access_token": create_access_token({"sub": str(user.id)}),
-        "refresh_token": create_refresh_token({"sub": str(user.id)}),
-        "token_type": "bearer",
+        "token": create_access_token({"sub": str(user.id)}),
+        "refreshToken": create_refresh_token({"sub": str(user.id)}),
+        "tokentype": "bearer",
     }
 
-
-# ---------------------------------------------------------------------------
-# Public service functions
-# ---------------------------------------------------------------------------
 
 def register(db: Session, email: str, full_name: str, password: str, phone_number: str | None = None, user_type: str = "customer") -> dict:
     if db.query(User).filter(User.email == email).first():
@@ -129,7 +119,6 @@ def register(db: Session, email: str, full_name: str, password: str, phone_numbe
 def verify_email(db: Session, email: str, code: str) -> dict:
     user = db.query(User).filter(User.email == email).first()
     if not user or user.is_verified:
-        # Silently succeed — don't reveal registration status
         raise BadRequestException("Invalid or expired OTP code")
     _verify_otp(db, email, code, _OTP_PURPOSE_VERIFY)
     user.is_verified = True
@@ -148,7 +137,6 @@ def resend_verification_otp(db: Session, email: str) -> dict:
         except Exception:
             logger.error("Failed to send verification email to %s",
                          email, exc_info=True)
-    # Always return the same message
     return {"message": "If your email is registered and unverified, a new code has been sent."}
 
 
@@ -185,14 +173,13 @@ def refresh_tokens(db: Session, refresh_token: str) -> dict:
         raise UnauthorizedException("Account not found or is inactive")
 
     return {
-        "access_token": create_access_token({"sub": str(user.id)}),
-        "refresh_token": create_refresh_token({"sub": str(user.id)}),
-        "token_type": "bearer",
+        "token": create_access_token({"sub": str(user.id)}),
+        "refreshToken": create_refresh_token({"sub": str(user.id)}),
+        "tokentype": "bearer",
     }
 
 
 def forgot_password(db: Session, email: str) -> dict:
-    # Always return the same message to prevent email enumeration
     user = db.query(User).filter(User.email == email).first()
     if user and user.is_verified:
         code = _create_otp(db, email, _OTP_PURPOSE_RESET)

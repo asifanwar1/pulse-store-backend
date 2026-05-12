@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -7,13 +7,17 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
+    model_config = ConfigDict(populate_by_name=True)
+
+    access_token: str = Field(alias="token")
+    refresh_token: str = Field(alias="refreshToken")
+    token_type: str = Field(default="bearer", alias="tokentype")
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    refresh_token: str = Field(alias="refreshToken")
 
 
 class RegisterRequest(BaseModel):
