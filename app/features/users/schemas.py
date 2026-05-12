@@ -36,7 +36,6 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     id: int
     is_active: bool = Field(alias="isActive")
-    is_admin: bool = Field(alias="isAdmin")
     created_at: datetime = Field(alias="createdAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)

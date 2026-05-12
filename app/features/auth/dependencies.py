@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError
@@ -7,10 +7,33 @@ from app.core.security import decode_token
 from app.core.exceptions import UnauthorizedException, ForbiddenException
 from app.features.users.models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def _extract_bearer_token(oauth_token: str | None, authorization: str | None) -> str:
+    if oauth_token:
+        return oauth_token
+
+    if not authorization:
+        raise UnauthorizedException()
+
+    parts = authorization.strip().split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer" and parts[1].strip():
+        return parts[1].strip()
+
+    # Some clients send the raw token in Authorization without the Bearer prefix.
+    if authorization.strip():
+        return authorization.strip()
+
+    raise UnauthorizedException()
+
+
+def get_current_user(
+    token: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> User:
+    token = _extract_bearer_token(token, authorization)
     try:
         payload = decode_token(token)
         if payload.get("type") != "access":
