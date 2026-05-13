@@ -43,7 +43,7 @@ def _decode_flow_token(token: str, expected_step: str) -> tuple[str, str]:
 
 
 def _generate_otp() -> str:
-    return "".join(secrets.choice("0123456789") for _ in range(6))
+    return "".join(secrets.choice("0123456789") for _ in range(4))
 
 
 def _hash_otp(code: str) -> str:

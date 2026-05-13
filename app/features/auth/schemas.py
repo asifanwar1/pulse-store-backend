@@ -42,8 +42,8 @@ class FlowTokenResponse(BaseModel):
 
 
 def _validate_otp_digits(v: str) -> str:
-    if not v.isdigit() or len(v) != 6:
-        raise ValueError("OTP must be exactly 6 digits")
+    if not v.isdigit() or len(v) != 4:
+        raise ValueError("OTP must be exactly 4 digits")
     return v
 
 
