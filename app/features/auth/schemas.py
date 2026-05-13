@@ -37,6 +37,10 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class FlowTokenResponse(BaseModel):
+    token: str
+
+
 def _validate_otp_digits(v: str) -> str:
     if not v.isdigit() or len(v) != 6:
         raise ValueError("OTP must be exactly 6 digits")
@@ -51,6 +55,16 @@ def _validate_password_strength(v: str) -> str:
     if not any(c in "!@#$%^&*()-_=+[]{}|;:,.<>?" for c in v):
         raise ValueError("Password must contain at least one special character")
     return v
+
+
+_ALLOWED_USER_TYPES = {"customer", "vendor", "admin"}
+
+
+def _validate_user_type(v: str) -> str:
+    normalized = v.strip().lower()
+    if normalized not in _ALLOWED_USER_TYPES:
+        raise ValueError("type must be one of: CUSTOMER, VENDOR, ADMIN")
+    return normalized
 
 
 class VerifyOTPRequest(BaseModel):
@@ -69,19 +83,29 @@ class ResendOTPRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+    type: str
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, v: str) -> str:
+        return _validate_user_type(v)
 
 
-class ResetPasswordRequest(BaseModel):
-    email: EmailStr
+class ForgotPasswordVerifyRequest(BaseModel):
+    token: str = Field(min_length=1)
     code: str
-    new_password: str = Field(min_length=8, max_length=128)
 
     @field_validator("code")
     @classmethod
     def validate_code(cls, v: str) -> str:
         return _validate_otp_digits(v)
 
-    @field_validator("new_password")
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=1)
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("password")
     @classmethod
-    def validate_new_password(cls, v: str) -> str:
+    def validate_password(cls, v: str) -> str:
         return _validate_password_strength(v)

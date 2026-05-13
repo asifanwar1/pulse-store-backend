@@ -3,6 +3,7 @@ import hmac
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from jose import JWTError
@@ -10,6 +11,7 @@ from app.config import settings
 from app.core.security import (
     verify_password, hash_password,
     create_access_token, create_refresh_token, decode_token,
+    create_flow_token,
 )
 from app.core.exceptions import UnauthorizedException, ConflictException, BadRequestException
 from app.core.email import send_otp_email
@@ -19,7 +21,25 @@ from app.features.auth.models import OTPCode
 _OTP_PURPOSE_VERIFY = "verify_email"
 _OTP_PURPOSE_RESET = "reset_password"
 
+_FLOW_TOKEN_TYPE = "pwflow"
+_FLOW_STEP_ISSUED = "issued"
+_FLOW_STEP_VERIFIED = "verified"
+
 logger = logging.getLogger(__name__)
+
+
+def _decode_flow_token(token: str, expected_step: str) -> tuple[str, str]:
+    try:
+        payload = decode_token(token)
+    except JWTError:
+        raise BadRequestException("Invalid or expired token")
+    if payload.get("type") != _FLOW_TOKEN_TYPE or payload.get("step") != expected_step:
+        raise BadRequestException("Invalid token")
+    email = payload.get("email")
+    user_type = payload.get("user_type")
+    if not email or not user_type:
+        raise BadRequestException("Invalid token")
+    return email, user_type
 
 
 def _generate_otp() -> str:
@@ -179,8 +199,19 @@ def refresh_tokens(db: Session, refresh_token: str) -> dict:
     }
 
 
-def forgot_password(db: Session, email: str) -> dict:
-    user = db.query(User).filter(User.email == email).first()
+def _find_user_by_email_and_type(db: Session, email: str, user_type: str) -> User | None:
+    return (
+        db.query(User)
+        .filter(
+            User.email == email,
+            func.lower(User.user_type) == user_type.lower(),
+        )
+        .first()
+    )
+
+
+def forgot_password(db: Session, email: str, user_type: str) -> dict:
+    user = _find_user_by_email_and_type(db, email, user_type)
     if user and user.is_verified:
         code = _create_otp(db, email, _OTP_PURPOSE_RESET)
         try:
@@ -188,19 +219,31 @@ def forgot_password(db: Session, email: str) -> dict:
         except Exception:
             logger.error("Failed to send password reset email to %s",
                          email, exc_info=True)
-    return {"message": "If an account with that email exists, a reset code has been sent."}
+    token = create_flow_token(
+        email, user_type, _FLOW_STEP_ISSUED, settings.OTP_EXPIRE_MINUTES
+    )
+    return {"token": token}
 
 
-def reset_password(db: Session, email: str, code: str, new_password: str) -> dict:
+def forgot_password_verify(db: Session, token: str, code: str) -> dict:
+    email, user_type = _decode_flow_token(token, _FLOW_STEP_ISSUED)
     _verify_otp(db, email, code, _OTP_PURPOSE_RESET)
+    new_token = create_flow_token(
+        email, user_type, _FLOW_STEP_VERIFIED, settings.OTP_EXPIRE_MINUTES
+    )
+    return {"token": new_token}
 
-    user = db.query(User).filter(User.email == email).first()
+
+def reset_password(db: Session, token: str, new_password: str) -> dict:
+    email, user_type = _decode_flow_token(token, _FLOW_STEP_VERIFIED)
+
+    user = _find_user_by_email_and_type(db, email, user_type)
     if not user:
         raise BadRequestException("Invalid request")
 
     user.hashed_password = hash_password(new_password)
     db.commit()
-    return {"message": "Password has been reset successfully. You can now log in."}
+    return {"token": ""}
 
 
 def logout() -> dict:

@@ -7,9 +7,9 @@ from app.features.auth import service
 from app.features.auth.dependencies import get_current_user
 from app.features.auth.schemas import (
     LoginRequest, TokenResponse, RefreshRequest,
-    RegisterRequest, MessageResponse,
+    RegisterRequest, MessageResponse, FlowTokenResponse,
     VerifyOTPRequest, ResendOTPRequest,
-    ForgotPasswordRequest, ResetPasswordRequest,
+    ForgotPasswordRequest, ForgotPasswordVerifyRequest, ResetPasswordRequest,
 )
 
 router = APIRouter()
@@ -63,13 +63,23 @@ def logout(request: Request, _=Depends(get_current_user)):
     return service.logout()
 
 
-@router.post("/forgot-password", response_model=MessageResponse)
+@router.post("/forgot-password", response_model=FlowTokenResponse)
 @limiter.limit("5/minute")
 def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    return service.forgot_password(db, data.email)
+    return service.forgot_password(db, data.email, data.type)
 
 
-@router.post("/reset-password", response_model=MessageResponse)
+@router.post("/forgot-password/verification", response_model=FlowTokenResponse)
+@limiter.limit("10/minute")
+def forgot_password_verification(
+    request: Request,
+    data: ForgotPasswordVerifyRequest,
+    db: Session = Depends(get_db),
+):
+    return service.forgot_password_verify(db, data.token, data.code)
+
+
+@router.post("/reset-password", response_model=FlowTokenResponse)
 @limiter.limit("5/minute")
 def reset_password(request: Request, data: ResetPasswordRequest, db: Session = Depends(get_db)):
-    return service.reset_password(db, data.email, data.code, data.new_password)
+    return service.reset_password(db, data.token, data.password)
