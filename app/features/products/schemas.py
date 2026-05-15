@@ -80,7 +80,6 @@ class ProductResponse(ProductPayloadBase):
     category_id: Optional[int] = None
     category_name: Optional[str] = None
     status: str
-    is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
 
