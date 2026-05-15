@@ -1,3 +1,4 @@
+from enum import Enum
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -34,3 +35,26 @@ class ProductResponse(ProductBase):
     updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class ProductSortDirection(str, Enum):
+    ASC = "ASC"
+    DESC = "DESC"
+
+
+class ProductStatusFilter(str, Enum):
+    ACTIVE = "ACTIVE"
+    DRAFT = "DRAFT"
+    OUT_OF_STOCK = "OUT_OF_STOCK"
+
+
+class ProductCategoryFilter(str, Enum):
+    ELECTRONICS = "ELECTRONICS"
+    SPORTS = "SPORTS"
+    CLOTHING = "CLOTHING"
+    BEAUTY = "BEAUTY"
+    BOOKS = "BOOKS"
+    HOME = "HOME"
+    GARDEN = "GARDEN"
+    TOYS = "TOYS"
+    FOOD = "FOOD"

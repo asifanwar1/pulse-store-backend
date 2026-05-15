@@ -1,17 +1,44 @@
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.products import service
-from app.features.products.schemas import ProductCreate, ProductUpdate, ProductResponse
+from app.features.products.schemas import (
+    ProductCategoryFilter,
+    ProductCreate,
+    ProductResponse,
+    ProductSortDirection,
+    ProductStatusFilter,
+    ProductUpdate,
+)
 from app.features.auth.dependencies import get_current_admin_user
 
 router = APIRouter()
 
 
 @router.get("/", response_model=list[ProductResponse])
-def list_products(skip: int = 0, limit: int = 100, category_id: Optional[int] = None, db: Session = Depends(get_db)):
-    return service.get_products(db, skip=skip, limit=limit, category_id=category_id)
+def list_products(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    column: str = Query("created_at"),
+    direction: ProductSortDirection = Query(ProductSortDirection.DESC),
+    search: Optional[str] = Query(None),
+    status: Optional[ProductStatusFilter] = Query(None),
+    category: Optional[ProductCategoryFilter] = Query(None),
+    category_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    return service.get_products(
+        db,
+        page=page,
+        limit=limit,
+        column=column,
+        direction=direction,
+        search=search,
+        status=status,
+        category=category,
+        category_id=category_id,
+    )
 
 
 @router.post("/", response_model=ProductResponse, status_code=201)
