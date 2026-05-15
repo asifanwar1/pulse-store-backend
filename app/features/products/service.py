@@ -1,9 +1,13 @@
 from typing import Optional
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.features.categories.models import Category
 from app.features.products.models import Product
 from app.features.products.schemas import (
+    ProductAnalyticsMetric,
+    ProductAnalyticsResponse,
     ProductCategoryFilter,
     ProductCreate,
     ProductSortDirection,
@@ -54,6 +58,68 @@ def _status_to_flags(status: ProductStatusFilter, stock_quantity: int) -> bool:
     if stock_quantity > 0:
         raise BadRequestException("stock_quantity must be 0 when status is OUT_OF_STOCK")
     return True
+
+
+def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
+    if previous == 0:
+        if current == 0:
+            return Decimal("0.00")
+        return Decimal("100.00")
+    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _to_decimal(value) -> Decimal:
+    if value is None:
+        return Decimal("0")
+    if isinstance(value, Decimal):
+        return value
+    return Decimal(str(value))
+
+
+def get_products_analytics(db: Session) -> ProductAnalyticsResponse:
+    period_start = datetime.now(timezone.utc) - timedelta(days=30)
+
+    all_products = db.query(Product).all()
+    previous_products = [product for product in all_products if product.created_at and product.created_at < period_start]
+
+    current_total = Decimal(len(all_products))
+    previous_total = Decimal(len(previous_products))
+
+    current_active = Decimal(sum(1 for product in all_products if product.is_active and product.stock_quantity > 0))
+    previous_active = Decimal(sum(1 for product in previous_products if product.is_active and product.stock_quantity > 0))
+
+    current_out_of_stock = Decimal(sum(1 for product in all_products if product.stock_quantity <= 0))
+    previous_out_of_stock = Decimal(sum(1 for product in previous_products if product.stock_quantity <= 0))
+
+    current_average_price = (
+        sum((_to_decimal(product.price) for product in all_products), Decimal("0")) / current_total
+        if all_products
+        else Decimal("0")
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    previous_average_price = (
+        sum((_to_decimal(product.price) for product in previous_products), Decimal("0")) / previous_total
+        if previous_products
+        else Decimal("0")
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    return ProductAnalyticsResponse(
+        total_products=ProductAnalyticsMetric(
+            value=int(current_total),
+            change_percentage=_calculate_percentage_change(current_total, previous_total),
+        ),
+        active_products=ProductAnalyticsMetric(
+            value=int(current_active),
+            change_percentage=_calculate_percentage_change(current_active, previous_active),
+        ),
+        out_of_stock_products=ProductAnalyticsMetric(
+            value=int(current_out_of_stock),
+            change_percentage=_calculate_percentage_change(current_out_of_stock, previous_out_of_stock),
+        ),
+        average_price=ProductAnalyticsMetric(
+            value=current_average_price,
+            change_percentage=_calculate_percentage_change(current_average_price, previous_average_price),
+        ),
+    )
 
 
 def get_products(

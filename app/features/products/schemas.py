@@ -84,3 +84,15 @@ class ProductResponse(ProductPayloadBase):
     updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+
+class ProductAnalyticsMetric(BaseModel):
+    value: int | Decimal
+    change_percentage: Decimal
+
+
+class ProductAnalyticsResponse(BaseModel):
+    total_products: ProductAnalyticsMetric
+    active_products: ProductAnalyticsMetric
+    out_of_stock_products: ProductAnalyticsMetric
+    average_price: ProductAnalyticsMetric

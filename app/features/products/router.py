@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.products import service
 from app.features.products.schemas import (
+    ProductAnalyticsResponse,
     ProductCategoryFilter,
     ProductCreate,
     ProductResponse,
@@ -39,6 +40,11 @@ def list_products(
         category=category,
         category_id=category_id,
     )
+
+
+@router.get("/analytics", response_model=ProductAnalyticsResponse)
+def get_products_analytics(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
+    return service.get_products_analytics(db)
 
 
 @router.post("/", response_model=ProductResponse, status_code=201)
