@@ -1,16 +1,22 @@
 import enum
-from sqlalchemy import Column, Integer, Numeric, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, Numeric, DateTime, ForeignKey, Enum, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
 
 class OrderStatus(str, enum.Enum):
-    pending = "pending"
-    processing = "processing"
-    shipped = "shipped"
-    delivered = "delivered"
-    cancelled = "cancelled"
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    SHIPPED = "SHIPPED"
+    DELIVERED = "DELIVERED"
+    CANCELLED = "CANCELLED"
+
+
+class PaymentMethod(str, enum.Enum):
+    card = "card"
+    cod = "cod"
+    bank_transfer = "bank_transfer"
 
 
 class Order(Base):
@@ -18,13 +24,19 @@ class Order(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    status = Column(Enum(OrderStatus), default=OrderStatus.pending)
+    status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
+    payment_method = Column(Enum(PaymentMethod), default=PaymentMethod.cod, nullable=False)
+    notes = Column(Text, nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     user = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order")
+
+    @property
+    def total_ordered_items(self) -> int:
+        return sum(item.quantity for item in self.items)
 
 
 class OrderItem(Base):

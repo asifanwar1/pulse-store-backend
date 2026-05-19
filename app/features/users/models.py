@@ -27,3 +27,7 @@ class User(Base):
 
     orders = relationship("Order", back_populates="user")
     cart = relationship("Cart", back_populates="user", uselist=False)
+
+    @property
+    def is_admin(self) -> bool:
+        return self.user_type == UserType.ADMIN.value

@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.orders import service
-from app.features.orders.schemas import OrderCreate, OrderStatusUpdate, OrderResponse
+from app.features.orders.schemas import OrderCreate, OrderListResponse, OrderSortDirection, OrderStatusUpdate, OrderResponse
+from app.features.orders.models import OrderStatus
 from app.features.auth.dependencies import get_current_user, get_current_admin_user
 from app.features.users.models import User
 from app.core.exceptions import ForbiddenException
@@ -10,16 +12,44 @@ from app.core.exceptions import ForbiddenException
 router = APIRouter()
 
 
-@router.get("/", response_model=list[OrderResponse])
-def list_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/", response_model=OrderListResponse)
+def list_orders(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    column: str = Query("created_at"),
+    direction: OrderSortDirection = Query(OrderSortDirection.DESC),
+    search: Optional[str] = Query(None),
+    status: Optional[OrderStatus] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if current_user.is_admin:
-        return service.get_orders(db, skip=skip, limit=limit)
-    return service.get_orders(db, user_id=current_user.id, skip=skip, limit=limit)
+        return service.get_orders(
+            db,
+            page=page,
+            limit=limit,
+            column=column,
+            direction=direction,
+            search=search,
+            status=status,
+        )
+    return service.get_orders(
+        db,
+        user_id=current_user.id,
+        page=page,
+        limit=limit,
+        column=column,
+        direction=direction,
+        search=search,
+        status=status,
+    )
 
 
 @router.post("/", response_model=OrderResponse, status_code=201)
 def create_order(order_in: OrderCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return service.create_order(db, current_user.id, order_in)
+    if not current_user.is_admin and order_in.user_id != current_user.id:
+        raise ForbiddenException()
+    return service.create_order(db, order_in)
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
