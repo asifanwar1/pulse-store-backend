@@ -132,7 +132,7 @@ def get_products(
     status: Optional[ProductStatusFilter] = None,
     category: Optional[ProductCategoryFilter] = None,
     category_id: Optional[int] = None,
-) -> list[Product]:
+) -> dict:
     query = db.query(Product).outerjoin(Category)
 
     if search:
@@ -162,6 +162,8 @@ def get_products(
     if category is not None:
         query = query.filter(Category.name.ilike(category.value))
 
+    total_count = query.count()
+
     sort_column = SORTABLE_PRODUCT_COLUMNS.get(column, Product.created_at)
     if direction == ProductSortDirection.ASC:
         query = query.order_by(sort_column.asc())
@@ -169,7 +171,8 @@ def get_products(
         query = query.order_by(sort_column.desc())
 
     offset = (page - 1) * limit
-    return query.offset(offset).limit(limit).all()
+    products = query.offset(offset).limit(limit).all()
+    return {"data": products, "count": total_count}
 
 
 def get_product_by_id(db: Session, product_id: int) -> Product:

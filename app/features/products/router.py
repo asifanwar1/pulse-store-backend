@@ -7,6 +7,7 @@ from app.features.products.schemas import (
     ProductAnalyticsResponse,
     ProductCategoryFilter,
     ProductCreate,
+    ProductListResponse,
     ProductResponse,
     ProductSortDirection,
     ProductStatusFilter,
@@ -17,7 +18,7 @@ from app.features.auth.dependencies import get_current_admin_user
 router = APIRouter()
 
 
-@router.get("/", response_model=list[ProductResponse])
+@router.get("/", response_model=ProductListResponse)
 def list_products(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),

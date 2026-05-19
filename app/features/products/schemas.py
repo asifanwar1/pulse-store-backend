@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_serializer, model_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
@@ -38,8 +38,8 @@ class ProductPayloadBase(BaseModel):
     sku: str
     brand: str
     description: Optional[str] = None
-    retail_price: Decimal
-    cost_price: Decimal
+    retail_price: Decimal = Field(..., max_digits=6, decimal_places=2)
+    cost_price: Decimal = Field(..., max_digits=6, decimal_places=2)
     stock_quantity: int = 0
     tags: list[str] = Field(default_factory=list)
     media: list[ProductMediaItem] = Field(default_factory=list)
@@ -64,8 +64,8 @@ class ProductUpdate(BaseModel):
     sku: Optional[str] = None
     brand: Optional[str] = None
     description: Optional[str] = None
-    retail_price: Optional[Decimal] = None
-    cost_price: Optional[Decimal] = None
+    retail_price: Optional[Decimal] = Field(None, max_digits=6, decimal_places=2)
+    cost_price: Optional[Decimal] = Field(None, max_digits=6, decimal_places=2)
     stock_quantity: Optional[int] = None
     category_id: Optional[int] = None
     category: Optional[ProductCategoryFilter] = None
@@ -84,6 +84,15 @@ class ProductResponse(ProductPayloadBase):
     updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("retail_price", "cost_price")
+    def serialize_prices(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+
+class ProductListResponse(BaseModel):
+    data: list[ProductResponse]
+    count: int
 
 
 class ProductAnalyticsMetric(BaseModel):
