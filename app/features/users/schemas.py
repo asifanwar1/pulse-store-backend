@@ -10,6 +10,21 @@ class UserType(str, Enum):
     VENDOR = "VENDOR"
 
 
+class UserSortDirection(str, Enum):
+    ASC = "ASC"
+    DESC = "DESC"
+
+
+class UserStatusFilter(str, Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+
+
+class UserTypeFilter(str, Enum):
+    CUSTOMER = "CUSTOMER"
+    VENDOR = "VENDOR"
+
+
 class UserBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -33,9 +48,18 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
 
 
+class UserStatusUpdate(BaseModel):
+    status: UserStatusFilter
+
+
 class UserResponse(UserBase):
     id: int
     is_active: bool = Field(alias="isActive")
     created_at: datetime = Field(alias="createdAt")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+
+class UserListResponse(BaseModel):
+    data: list[UserResponse]
+    count: int
