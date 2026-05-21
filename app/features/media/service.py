@@ -70,6 +70,7 @@ def upload_media(file: UploadFile, folder: str = "general") -> MediaUploadRespon
     return MediaUploadResponse(
         id=storage_path,
         url=public_url,
+        file_name=file.filename or Path(storage_path).name,
         bucket=bucket_name,
         path=storage_path,
     )

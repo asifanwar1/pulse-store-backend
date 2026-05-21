@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class MediaItem(BaseModel):
     id: str
     url: str
+    file_name: str
 
 
 class MediaUploadResponse(MediaItem):
