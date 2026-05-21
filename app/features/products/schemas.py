@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_serializer, model_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
+from app.features.media.schemas import MediaItem
 
 
 class ProductSortDirection(str, Enum):
@@ -28,11 +29,6 @@ class ProductCategoryFilter(str, Enum):
     FOOD = "FOOD"
 
 
-class ProductMediaItem(BaseModel):
-    id: str
-    url: str
-
-
 class ProductPayloadBase(BaseModel):
     name: str
     sku: str
@@ -42,7 +38,7 @@ class ProductPayloadBase(BaseModel):
     cost_price: Decimal = Field(..., max_digits=6, decimal_places=2)
     stock_quantity: int = 0
     tags: list[str] = Field(default_factory=list)
-    media: list[ProductMediaItem] = Field(default_factory=list)
+    media: list[MediaItem] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_status_stock_consistency(self):
@@ -71,7 +67,7 @@ class ProductUpdate(BaseModel):
     category: Optional[ProductCategoryFilter] = None
     status: Optional[ProductStatusFilter] = None
     tags: Optional[list[str]] = None
-    media: Optional[list[ProductMediaItem]] = None
+    media: Optional[list[MediaItem]] = None
 
 
 class ProductResponse(ProductPayloadBase):
