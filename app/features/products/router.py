@@ -1,7 +1,8 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
+from app.core.supabase_storage import upload_product_media
 from app.features.products import service
 from app.features.products.schemas import (
     ProductAnalyticsResponse,
@@ -11,6 +12,7 @@ from app.features.products.schemas import (
     ProductResponse,
     ProductSortDirection,
     ProductStatusFilter,
+    ProductMediaItem,
     ProductUpdate,
 )
 from app.features.auth.dependencies import get_current_admin_user
@@ -51,6 +53,11 @@ def get_products_analytics(db: Session = Depends(get_db), _=Depends(get_current_
 @router.post("/", response_model=ProductResponse, status_code=201)
 def create_product(product_in: ProductCreate, db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
     return service.create_product(db, product_in)
+
+
+@router.post("/media", response_model=ProductMediaItem, status_code=201)
+def upload_product_image(file: UploadFile = File(...), _=Depends(get_current_admin_user)):
+    return upload_product_media(file)
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     EMAILS_FROM_NAME: str = "Pulse Store"
     OTP_EXPIRE_MINUTES: int = 10
 
+    # Supabase
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_STORAGE_BUCKET: str = "product-media"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
