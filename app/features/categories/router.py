@@ -1,16 +1,22 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.categories import service
-from app.features.categories.schemas import CategoryCreate, CategoryUpdate, CategoryResponse
+from app.features.categories.schemas import CategoryCreate, CategoryUpdate, CategoryListResponse, CategoryResponse
 from app.features.auth.dependencies import get_current_admin_user
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[CategoryResponse])
-def list_categories(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return service.get_categories(db, skip=skip, limit=limit)
+@router.get("/", response_model=CategoryListResponse)
+def list_categories(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    return service.get_categories(db, page=page, limit=limit, search=search)
 
 
 @router.post("/", response_model=CategoryResponse, status_code=201)

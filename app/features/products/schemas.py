@@ -34,8 +34,8 @@ class ProductPayloadBase(BaseModel):
     sku: str
     brand: str
     description: Optional[str] = None
-    retail_price: Decimal = Field(..., max_digits=6, decimal_places=2)
-    cost_price: Decimal = Field(..., max_digits=6, decimal_places=2)
+    retail_price: Decimal = Field(..., max_digits=10, decimal_places=2)
+    cost_price: Decimal = Field(..., max_digits=10, decimal_places=2)
     stock_quantity: int = 0
     tags: list[str] = Field(default_factory=list)
     media: list[MediaItem] = Field(default_factory=list)
@@ -60,8 +60,8 @@ class ProductUpdate(BaseModel):
     sku: Optional[str] = None
     brand: Optional[str] = None
     description: Optional[str] = None
-    retail_price: Optional[Decimal] = Field(None, max_digits=6, decimal_places=2)
-    cost_price: Optional[Decimal] = Field(None, max_digits=6, decimal_places=2)
+    retail_price: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
+    cost_price: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
     stock_quantity: Optional[int] = None
     category_id: Optional[int] = None
     category: Optional[ProductCategoryFilter] = None

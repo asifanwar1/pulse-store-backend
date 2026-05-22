@@ -26,3 +26,8 @@ class CategoryResponse(CategoryBase):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class CategoryListResponse(BaseModel):
+    data: list[CategoryResponse]
+    count: int

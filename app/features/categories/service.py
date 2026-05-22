@@ -4,8 +4,28 @@ from app.features.categories.schemas import CategoryCreate, CategoryUpdate
 from app.core.exceptions import NotFoundException, ConflictException
 
 
-def get_categories(db: Session, skip: int = 0, limit: int = 100) -> list[Category]:
-    return db.query(Category).offset(skip).limit(limit).all()
+def get_categories(
+    db: Session,
+    page: int = 1,
+    limit: int = 10,
+    search: str | None = None,
+) -> dict:
+    query = db.query(Category)
+
+    if search:
+        normalized_search = search.strip()
+        if normalized_search:
+            search_term = f"%{normalized_search}%"
+            query = query.filter(
+                Category.name.ilike(search_term) |
+                Category.slug.ilike(search_term) |
+                Category.description.ilike(search_term)
+            )
+
+    total_count = query.count()
+    offset = (page - 1) * limit
+    categories = query.order_by(Category.created_at.desc()).offset(offset).limit(limit).all()
+    return {"data": categories, "count": total_count}
 
 
 def get_category_by_id(db: Session, category_id: int) -> Category:
