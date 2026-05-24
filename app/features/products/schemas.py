@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel, Field, field_serializer, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_serializer, model_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
@@ -51,7 +51,7 @@ class ProductPayloadBase(BaseModel):
 
 
 class ProductCreate(ProductPayloadBase):
-    category: ProductCategoryFilter
+    category_id: int = Field(validation_alias=AliasChoices("category_id", "category"))
     status: ProductStatusFilter
 
 
@@ -63,8 +63,7 @@ class ProductUpdate(BaseModel):
     retail_price: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
     cost_price: Optional[Decimal] = Field(None, max_digits=10, decimal_places=2)
     stock_quantity: Optional[int] = None
-    category_id: Optional[int] = None
-    category: Optional[ProductCategoryFilter] = None
+    category_id: Optional[int] = Field(None, validation_alias=AliasChoices("category_id", "category"))
     status: Optional[ProductStatusFilter] = None
     tags: Optional[list[str]] = None
     media: Optional[list[MediaItem]] = None

@@ -41,10 +41,10 @@ def _generate_product_slug(name: str, sku: str) -> str:
     return _slugify(f"{name}-{sku}")
 
 
-def _resolve_category_id(db: Session, category: ProductCategoryFilter) -> int:
-    category_record = db.query(Category).filter(Category.name.ilike(category.value)).first()
+def _require_category_id(db: Session, category_id: int) -> int:
+    category_record = db.query(Category).filter(Category.id == category_id).first()
     if not category_record:
-        raise NotFoundException(f"Category {category.value} not found")
+        raise NotFoundException(f"Category {category_id} not found")
     return category_record.id
 
 
@@ -190,7 +190,7 @@ def create_product(db: Session, product_in: ProductCreate) -> Product:
     if db.query(Product).filter(Product.slug == slug).first():
         raise ConflictException("Generated product slug already exists")
 
-    category_id = _resolve_category_id(db, product_in.category)
+    category_id = _require_category_id(db, product_in.category_id)
     is_active = _status_to_flags(product_in.status, product_in.stock_quantity)
 
     product = Product(
@@ -239,9 +239,7 @@ def update_product(db: Session, product_id: int, product_in: ProductUpdate) -> P
     if "media" in update_data:
         product.media = [item.model_dump() for item in product_in.media or []]
     if "category_id" in update_data:
-        product.category_id = update_data["category_id"]
-    if "category" in update_data and update_data["category"] is not None:
-        product.category_id = _resolve_category_id(db, update_data["category"])
+        product.category_id = _require_category_id(db, update_data["category_id"])
     if "status" in update_data and update_data["status"] is not None:
         product.is_active = _status_to_flags(update_data["status"], product.stock_quantity)
 
