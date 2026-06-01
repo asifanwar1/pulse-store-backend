@@ -16,6 +16,8 @@ class Product(Base):
     price = Column(Numeric(10, 2), nullable=False)
     cost_price = Column(Numeric(10, 2), nullable=False)
     stock_quantity = Column(Integer, default=0)
+    total_sales = Column(Integer, nullable=False, default=0)
+    rating = Column(Integer, nullable=True)
     tags = Column(JSON, nullable=False, default=list)
     media = Column(JSON, nullable=False, default=list)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)

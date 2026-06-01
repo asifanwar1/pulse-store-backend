@@ -69,12 +69,22 @@ class ProductUpdate(BaseModel):
     media: Optional[list[MediaItem]] = None
 
 
+class ProductTotalSalesUpdate(BaseModel):
+    total_sales: int = Field(..., ge=0)
+
+
+class ProductRatingUpdate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+
+
 class ProductResponse(ProductPayloadBase):
     id: int
     slug: str
     category_id: Optional[int] = None
     category_name: Optional[str] = None
     status: str
+    total_sales: int = 0
+    rating: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

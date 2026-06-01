@@ -13,10 +13,12 @@ from app.features.products.schemas import (
     ProductCreate,
     ProductMonthlySalesItem,
     ProductMonthlySalesResponse,
+    ProductRatingUpdate,
     ProductReviewsResponse,
     ProductReviewResponse,
     ProductSortDirection,
     ProductStatusFilter,
+    ProductTotalSalesUpdate,
     ProductUpdate,
 )
 from app.core.exceptions import BadRequestException, NotFoundException, ConflictException
@@ -191,21 +193,21 @@ def get_product_monthly_sales(db: Session, product_id: int) -> ProductMonthlySal
     get_product_by_id(db, product_id)
 
     order_items = (
-        db.query(OrderItem, Order)
+        db.query(OrderItem.quantity, OrderItem.unit_price, Order.created_at)
         .join(Order, Order.id == OrderItem.order_id)
         .filter(OrderItem.product_id == product_id, Order.status != OrderStatus.CANCELLED)
         .all()
     )
 
     monthly_sales: dict[str, dict[str, Decimal | int]] = {}
-    for order_item, order in order_items:
-        if not order.created_at:
+    for quantity, unit_price, created_at in order_items:
+        if not created_at:
             continue
-        month = order.created_at.strftime("%Y-%m")
+        month = created_at.strftime("%Y-%m")
         if month not in monthly_sales:
             monthly_sales[month] = {"quantity_sold": 0, "revenue": Decimal("0")}
-        monthly_sales[month]["quantity_sold"] += order_item.quantity
-        monthly_sales[month]["revenue"] += _to_decimal(order_item.unit_price) * Decimal(order_item.quantity)
+        monthly_sales[month]["quantity_sold"] += quantity
+        monthly_sales[month]["revenue"] += _to_decimal(unit_price) * Decimal(quantity)
 
     data = [
         ProductMonthlySalesItem(
@@ -251,6 +253,22 @@ def get_product_customer_reviews(db: Session, product_id: int) -> ProductReviews
     return ProductReviewsResponse(product_id=product_id, data=data, count=len(data), average_rating=average_rating)
 
 
+def update_product_total_sales(db: Session, product_id: int, sales_in: ProductTotalSalesUpdate) -> Product:
+    product = get_product_by_id(db, product_id)
+    product.total_sales = sales_in.total_sales
+    db.commit()
+    db.refresh(product)
+    return product
+
+
+def update_product_rating(db: Session, product_id: int, rating_in: ProductRatingUpdate) -> Product:
+    product = get_product_by_id(db, product_id)
+    product.rating = rating_in.rating
+    db.commit()
+    db.refresh(product)
+    return product
+
+
 def create_product(db: Session, product_in: ProductCreate) -> Product:
     if db.query(Product).filter(Product.sku == product_in.sku).first():
         raise ConflictException("Product SKU already exists")
@@ -271,6 +289,8 @@ def create_product(db: Session, product_in: ProductCreate) -> Product:
         price=product_in.retail_price,
         cost_price=product_in.cost_price,
         stock_quantity=product_in.stock_quantity,
+        total_sales=0,
+        rating=None,
         tags=[tag.strip() for tag in product_in.tags if tag.strip()],
         media=[item.model_dump() for item in product_in.media],
         category_id=category_id,
