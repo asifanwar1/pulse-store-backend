@@ -8,7 +8,9 @@ from app.features.products.schemas import (
     ProductCategoryFilter,
     ProductCreate,
     ProductListResponse,
+    ProductMonthlySalesResponse,
     ProductResponse,
+    ProductReviewsResponse,
     ProductSortDirection,
     ProductStatusFilter,
     ProductUpdate,
@@ -56,6 +58,16 @@ def create_product(product_in: ProductCreate, db: Session = Depends(get_db), _=D
 @router.get("/{product_id}", response_model=ProductResponse)
 def get_product(product_id: int, db: Session = Depends(get_db)):
     return service.get_product_by_id(db, product_id)
+
+
+@router.get("/{product_id}/monthly-sales", response_model=ProductMonthlySalesResponse)
+def get_product_monthly_sales(product_id: int, db: Session = Depends(get_db)):
+    return service.get_product_monthly_sales(db, product_id)
+
+
+@router.get("/{product_id}/customer-reviews", response_model=ProductReviewsResponse)
+def get_product_customer_reviews(product_id: int, db: Session = Depends(get_db)):
+    return service.get_product_customer_reviews(db, product_id)
 
 
 @router.put("/{product_id}", response_model=ProductResponse)

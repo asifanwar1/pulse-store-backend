@@ -110,3 +110,42 @@ class ProductAnalyticsResponse(BaseModel):
     active_products: ProductAnalyticsMetric
     out_of_stock_products: ProductAnalyticsMetric
     average_price: ProductAnalyticsMetric
+
+
+class ProductMonthlySalesItem(BaseModel):
+    month: str
+    quantity_sold: int
+    revenue: Decimal
+
+    @field_serializer("revenue")
+    def serialize_revenue(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+
+class ProductMonthlySalesResponse(BaseModel):
+    product_id: int
+    data: list[ProductMonthlySalesItem]
+    count: int
+
+
+class ProductReviewResponse(BaseModel):
+    id: int
+    product_id: int
+    user_id: int
+    customer_name: str
+    rating: int
+    comment: Optional[str] = None
+    created_at: datetime
+
+
+class ProductReviewsResponse(BaseModel):
+    product_id: int
+    data: list[ProductReviewResponse]
+    count: int
+    average_rating: Optional[Decimal] = None
+
+    @field_serializer("average_rating")
+    def serialize_average_rating(self, value: Optional[Decimal]) -> Optional[str]:
+        if value is None:
+            return None
+        return f"{value:.2f}"

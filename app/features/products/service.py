@@ -3,13 +3,18 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.categories.models import Category
-from app.features.products.models import Product
+from app.features.products.models import Product, ProductReview
 from app.features.products.schemas import (
     ProductAnalyticsMetric,
     ProductAnalyticsResponse,
     ProductCategoryFilter,
     ProductCreate,
+    ProductMonthlySalesItem,
+    ProductMonthlySalesResponse,
+    ProductReviewsResponse,
+    ProductReviewResponse,
     ProductSortDirection,
     ProductStatusFilter,
     ProductUpdate,
@@ -180,6 +185,70 @@ def get_product_by_id(db: Session, product_id: int) -> Product:
     if not product:
         raise NotFoundException("Product not found")
     return product
+
+
+def get_product_monthly_sales(db: Session, product_id: int) -> ProductMonthlySalesResponse:
+    get_product_by_id(db, product_id)
+
+    order_items = (
+        db.query(OrderItem, Order)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(OrderItem.product_id == product_id, Order.status != OrderStatus.CANCELLED)
+        .all()
+    )
+
+    monthly_sales: dict[str, dict[str, Decimal | int]] = {}
+    for order_item, order in order_items:
+        if not order.created_at:
+            continue
+        month = order.created_at.strftime("%Y-%m")
+        if month not in monthly_sales:
+            monthly_sales[month] = {"quantity_sold": 0, "revenue": Decimal("0")}
+        monthly_sales[month]["quantity_sold"] += order_item.quantity
+        monthly_sales[month]["revenue"] += _to_decimal(order_item.unit_price) * Decimal(order_item.quantity)
+
+    data = [
+        ProductMonthlySalesItem(
+            month=month,
+            quantity_sold=int(values["quantity_sold"]),
+            revenue=_to_decimal(values["revenue"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+        )
+        for month, values in sorted(monthly_sales.items())
+    ]
+
+    return ProductMonthlySalesResponse(product_id=product_id, data=data, count=len(data))
+
+
+def get_product_customer_reviews(db: Session, product_id: int) -> ProductReviewsResponse:
+    get_product_by_id(db, product_id)
+
+    reviews = (
+        db.query(ProductReview)
+        .filter(ProductReview.product_id == product_id)
+        .order_by(ProductReview.created_at.desc())
+        .all()
+    )
+
+    average_rating = None
+    if reviews:
+        average_rating = (
+            sum((Decimal(review.rating) for review in reviews), Decimal("0")) / Decimal(len(reviews))
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    data = [
+        ProductReviewResponse(
+            id=review.id,
+            product_id=review.product_id,
+            user_id=review.user_id,
+            customer_name=review.user.full_name,
+            rating=review.rating,
+            comment=review.comment,
+            created_at=review.created_at,
+        )
+        for review in reviews
+    ]
+
+    return ProductReviewsResponse(product_id=product_id, data=data, count=len(data), average_rating=average_rating)
 
 
 def create_product(db: Session, product_in: ProductCreate) -> Product:

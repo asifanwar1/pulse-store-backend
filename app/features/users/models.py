@@ -27,6 +27,7 @@ class User(Base):
 
     orders = relationship("Order", back_populates="user")
     cart = relationship("Cart", back_populates="user", uselist=False)
+    product_reviews = relationship("ProductReview", back_populates="user")
 
     @property
     def is_admin(self) -> bool:

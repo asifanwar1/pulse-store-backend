@@ -26,6 +26,7 @@ class Product(Base):
     category = relationship("Category", back_populates="products")
     order_items = relationship("OrderItem", back_populates="product")
     cart_items = relationship("CartItem", back_populates="product")
+    reviews = relationship("ProductReview", back_populates="product")
 
     @property
     def retail_price(self):
@@ -42,3 +43,18 @@ class Product(Base):
     @property
     def category_name(self):
         return self.category.name if self.category else None
+
+
+class ProductReview(Base):
+    __tablename__ = "product_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    product = relationship("Product", back_populates="reviews")
+    user = relationship("User", back_populates="product_reviews")
