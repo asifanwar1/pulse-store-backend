@@ -37,7 +37,7 @@ class Product(Base):
     @property
     def status(self):
         if not self.is_active:
-            return "DRAFT"
+            return "INACTIVE"
         if self.stock_quantity <= 0:
             return "OUT_OF_STOCK"
         return "ACTIVE"

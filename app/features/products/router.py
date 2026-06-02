@@ -82,7 +82,7 @@ def update_product_rating(product_id: int, rating_in: ProductRatingUpdate, db: S
     return service.update_product_rating(db, product_id, rating_in)
 
 
-@router.put("/{product_id}", response_model=ProductResponse)
+@router.patch("/{product_id}", response_model=ProductResponse)
 def update_product(product_id: int, product_in: ProductUpdate, db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
     return service.update_product(db, product_id, product_in)
 

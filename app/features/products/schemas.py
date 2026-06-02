@@ -14,6 +14,7 @@ class ProductSortDirection(str, Enum):
 class ProductStatusFilter(str, Enum):
     ACTIVE = "ACTIVE"
     DRAFT = "DRAFT"
+    INACTIVE = "INACTIVE"
     OUT_OF_STOCK = "OUT_OF_STOCK"
 
 

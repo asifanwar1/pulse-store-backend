@@ -60,7 +60,7 @@ def _status_to_flags(status: ProductStatusFilter, stock_quantity: int) -> bool:
         if stock_quantity <= 0:
             raise BadRequestException("stock_quantity must be greater than 0 when status is ACTIVE")
         return True
-    if status == ProductStatusFilter.DRAFT:
+    if status in (ProductStatusFilter.DRAFT, ProductStatusFilter.INACTIVE):
         return False
     if stock_quantity > 0:
         raise BadRequestException("stock_quantity must be 0 when status is OUT_OF_STOCK")
@@ -159,7 +159,7 @@ def get_products(
 
     if status == ProductStatusFilter.ACTIVE:
         query = query.filter(Product.is_active.is_(True), Product.stock_quantity > 0)
-    elif status == ProductStatusFilter.DRAFT:
+    elif status in (ProductStatusFilter.DRAFT, ProductStatusFilter.INACTIVE):
         query = query.filter(Product.is_active.is_(False))
     elif status == ProductStatusFilter.OUT_OF_STOCK:
         query = query.filter(Product.stock_quantity <= 0)
