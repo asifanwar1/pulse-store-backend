@@ -40,6 +40,28 @@ class OrderStatusUpdate(BaseModel):
     status: OrderStatus
 
 
+class OrderAnalyticsMetric(BaseModel):
+    value: int | Decimal
+    change_percentage: Decimal
+
+    @field_serializer("value")
+    def serialize_value(self, value: int | Decimal) -> int | str:
+        if isinstance(value, Decimal):
+            return f"{value:.2f}"
+        return value
+
+    @field_serializer("change_percentage")
+    def serialize_change_percentage(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+
+class OrderAnalyticsResponse(BaseModel):
+    totalOrders: OrderAnalyticsMetric
+    pendingOrders: OrderAnalyticsMetric
+    shippedOrders: OrderAnalyticsMetric
+    revenue: OrderAnalyticsMetric
+
+
 class OrderUserResponse(BaseModel):
     id: int
     name: str = Field(validation_alias="full_name")

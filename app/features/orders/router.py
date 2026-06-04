@@ -3,7 +3,14 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.orders import service
-from app.features.orders.schemas import OrderCreate, OrderListResponse, OrderSortDirection, OrderStatusUpdate, OrderResponse
+from app.features.orders.schemas import (
+    OrderAnalyticsResponse,
+    OrderCreate,
+    OrderListResponse,
+    OrderSortDirection,
+    OrderStatusUpdate,
+    OrderResponse,
+)
 from app.features.orders.models import OrderStatus
 from app.features.auth.dependencies import get_current_user, get_current_admin_user
 from app.features.users.models import User
@@ -43,6 +50,11 @@ def list_orders(
         search=search,
         status=status,
     )
+
+
+@router.get("/analytics", response_model=OrderAnalyticsResponse)
+def get_orders_analytics(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
+    return service.get_orders_analytics(db)
 
 
 @router.post("/", response_model=OrderResponse, status_code=201)
