@@ -26,8 +26,13 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     phone_number: str | None = None
     address: Address = Field(default_factory=Address)
-    user_type: str = "customer"
+    user_type: str = "CUSTOMER"
     password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("user_type")
+    @classmethod
+    def validate_user_type(cls, v: str) -> str:
+        return _validate_user_type(v)
 
     @field_validator("password")
     @classmethod
@@ -59,11 +64,11 @@ def _validate_password_strength(v: str) -> str:
     return v
 
 
-_ALLOWED_USER_TYPES = {"customer", "vendor", "admin"}
+_ALLOWED_USER_TYPES = {"CUSTOMER", "VENDOR", "ADMIN"}
 
 
 def _validate_user_type(v: str) -> str:
-    normalized = v.strip().lower()
+    normalized = v.strip().upper()
     if normalized not in _ALLOWED_USER_TYPES:
         raise ValueError("type must be one of: CUSTOMER, VENDOR, ADMIN")
     return normalized

@@ -112,7 +112,7 @@ def register(
     full_name: str,
     password: str,
     phone_number: str | None = None,
-    user_type: str = "customer",
+    user_type: str = "CUSTOMER",
     address: Address | None = None,
 ) -> dict:
     if db.query(User).filter(User.email == email).first():
