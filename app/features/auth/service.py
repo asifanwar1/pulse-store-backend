@@ -16,6 +16,7 @@ from app.core.security import (
 from app.core.exceptions import UnauthorizedException, ConflictException, BadRequestException
 from app.core.email import send_otp_email
 from app.features.users.models import User
+from app.features.users.schemas import Address
 from app.features.auth.models import OTPCode
 
 _OTP_PURPOSE_VERIFY = "verify_email"
@@ -105,7 +106,15 @@ def _token_pair(user: User) -> dict:
     }
 
 
-def register(db: Session, email: str, full_name: str, password: str, phone_number: str | None = None, user_type: str = "customer") -> dict:
+def register(
+    db: Session,
+    email: str,
+    full_name: str,
+    password: str,
+    phone_number: str | None = None,
+    user_type: str = "customer",
+    address: Address | None = None,
+) -> dict:
     if db.query(User).filter(User.email == email).first():
         raise ConflictException("An account with this email already exists")
 
@@ -113,6 +122,7 @@ def register(db: Session, email: str, full_name: str, password: str, phone_numbe
         email=email,
         full_name=full_name,
         phone_number=phone_number,
+        address=(address or Address()).model_dump(),
         user_type=user_type,
         hashed_password=hash_password(password),
         is_active=False,

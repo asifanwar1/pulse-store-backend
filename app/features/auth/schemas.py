@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
+from app.features.users.schemas import Address
 
 
 class LoginRequest(BaseModel):
@@ -24,6 +25,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=2, max_length=100)
     phone_number: str | None = None
+    address: Address = Field(default_factory=Address)
     user_type: str = "customer"
     password: str = Field(min_length=8, max_length=128)
 

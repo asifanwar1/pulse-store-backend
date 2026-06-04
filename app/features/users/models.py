@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -11,6 +11,18 @@ class UserType(PyEnum):
     VENDOR = "VENDOR"
 
 
+def default_address() -> dict:
+    return {
+        "street_address": "",
+        "city": "",
+        "country": "",
+        "state": "",
+        "zipcode": "",
+        "latitude": "",
+        "longitude": "",
+    }
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -18,6 +30,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     phone_number = Column(String, nullable=True)
+    address = Column(JSON, nullable=False, default=default_address)
     user_type = Column(String, nullable=False, default=UserType.CUSTOMER)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)

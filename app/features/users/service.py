@@ -84,6 +84,8 @@ def update_user(db: Session, user_id: int, user_in: UserUpdate) -> User:
         user.full_name = user_in.full_name
     if user_in.phone_number is not None:
         user.phone_number = user_in.phone_number
+    if user_in.address is not None:
+        user.address = user_in.address.model_dump()
     if user_in.user_type is not None:
         user.user_type = user_in.user_type
     if user_in.password is not None:
