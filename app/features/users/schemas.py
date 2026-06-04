@@ -1,6 +1,7 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from typing import Optional
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
 
@@ -79,3 +80,19 @@ class UserResponse(UserBase):
 class UserListResponse(BaseModel):
     data: list[UserResponse]
     count: int
+
+
+class UserAnalyticsMetric(BaseModel):
+    value: int
+    change_percentage: Decimal
+
+    @field_serializer("change_percentage")
+    def serialize_change_percentage(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+
+class UserAnalyticsResponse(BaseModel):
+    totalCustomers: UserAnalyticsMetric
+    activeCustomers: UserAnalyticsMetric
+    InactiveCustomer: UserAnalyticsMetric
+    blockedCustomer: UserAnalyticsMetric

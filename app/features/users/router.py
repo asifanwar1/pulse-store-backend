@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.users import service
 from app.features.users.schemas import (
+    UserAnalyticsResponse,
     UserListResponse,
     UserResponse,
     UserSortDirection,
@@ -49,6 +50,11 @@ def list_users(
         status=status,
         user_type=user_type,
     )
+
+
+@router.get("/analytics", response_model=UserAnalyticsResponse)
+def get_users_analytics(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
+    return service.get_users_analytics(db)
 
 
 @router.get("/{user_id}", response_model=UserResponse)
