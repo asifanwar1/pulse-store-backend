@@ -15,7 +15,7 @@ from app.core.security import (
 )
 from app.core.exceptions import UnauthorizedException, ConflictException, BadRequestException
 from app.core.email import send_otp_email
-from app.features.users.models import User
+from app.features.users.models import User, UserStatus
 from app.features.users.schemas import Address
 from app.features.auth.models import OTPCode
 
@@ -124,6 +124,7 @@ def register(
         phone_number=phone_number,
         address=(address or Address()).model_dump(),
         user_type=user_type,
+        status=UserStatus.INACTIVE.value,
         hashed_password=hash_password(password),
         is_active=False,
         is_verified=False,
@@ -153,6 +154,7 @@ def verify_email(db: Session, email: str, code: str) -> dict:
     _verify_otp(db, email, code, _OTP_PURPOSE_VERIFY)
     user.is_verified = True
     user.is_active = True
+    user.status = UserStatus.ACTIVE.value
     db.commit()
     db.refresh(user)
     return _token_pair(user)
@@ -177,7 +179,9 @@ def login(db: Session, email: str, password: str) -> dict:
     if not user.is_verified:
         raise UnauthorizedException(
             "Please verify your email before logging in")
-    if not user.is_active:
+    if user.status == UserStatus.BLOCKED.value:
+        raise UnauthorizedException("Account is blocked")
+    if not user.is_active or user.status != UserStatus.ACTIVE.value:
         raise UnauthorizedException("Account is inactive")
     return _token_pair(user)
 
@@ -199,7 +203,7 @@ def refresh_tokens(db: Session, refresh_token: str) -> dict:
         raise UnauthorizedException()
 
     user = db.query(User).filter(User.id == uid).first()
-    if not user or not user.is_active or not user.is_verified:
+    if not user or not user.is_active or not user.is_verified or user.status != UserStatus.ACTIVE.value:
         raise UnauthorizedException("Account not found or is inactive")
 
     return {

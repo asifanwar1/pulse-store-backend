@@ -18,6 +18,7 @@ class UserSortDirection(str, Enum):
 class UserStatusFilter(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
+    BLOCKED = "BLOCKED"
 
 
 class UserTypeFilter(str, Enum):
@@ -66,6 +67,9 @@ class UserStatusUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    status: UserStatusFilter
+    total_orders: int = 0
+    last_order: Optional[datetime] = None
     is_active: bool = Field(alias="isActive")
     created_at: datetime = Field(alias="createdAt")
 

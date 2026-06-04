@@ -5,7 +5,7 @@ from jose import JWTError
 from app.dependencies import get_db
 from app.core.security import decode_token
 from app.core.exceptions import UnauthorizedException, ForbiddenException
-from app.features.users.models import User
+from app.features.users.models import User, UserStatus
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False)
 
@@ -48,7 +48,7 @@ def get_current_user(
     except (ValueError, TypeError):
         raise UnauthorizedException()
     user = db.query(User).filter(User.id == uid).first()
-    if not user or not user.is_active or not user.is_verified:
+    if not user or not user.is_active or not user.is_verified or user.status != UserStatus.ACTIVE.value:
         raise UnauthorizedException()
     return user
 

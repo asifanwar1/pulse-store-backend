@@ -11,6 +11,12 @@ class UserType(PyEnum):
     VENDOR = "VENDOR"
 
 
+class UserStatus(PyEnum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    BLOCKED = "BLOCKED"
+
+
 def default_address() -> dict:
     return {
         "street_address": "",
@@ -32,6 +38,7 @@ class User(Base):
     phone_number = Column(String, nullable=True)
     address = Column(JSON, nullable=False, default=default_address)
     user_type = Column(String, nullable=False, default=UserType.CUSTOMER)
+    status = Column(String, nullable=False, default=UserStatus.ACTIVE.value)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
