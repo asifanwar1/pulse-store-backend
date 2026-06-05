@@ -19,11 +19,16 @@ from app.core.exceptions import NotFoundException, ConflictException
 SORTABLE_ORDER_COLUMNS = {
     "id": Order.id,
     "user_id": Order.user_id,
+    "userId": Order.user_id,
     "status": Order.status,
     "payment_method": Order.payment_method,
+    "paymentMethod": Order.payment_method,
     "total_amount": Order.total_amount,
+    "totalAmount": Order.total_amount,
     "created_at": Order.created_at,
+    "createdAt": Order.created_at,
     "updated_at": Order.updated_at,
+    "updatedAt": Order.updated_at,
 }
 
 
