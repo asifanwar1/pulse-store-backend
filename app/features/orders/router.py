@@ -27,12 +27,14 @@ def list_orders(
     direction: OrderSortDirection = Query(OrderSortDirection.DESC),
     search: Optional[str] = Query(None),
     status: Optional[OrderStatus] = Query(None),
+    user_id: Optional[int] = Query(None, ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.is_admin:
         return service.get_orders(
             db,
+            user_id=user_id,
             page=page,
             limit=limit,
             column=column,
@@ -40,6 +42,8 @@ def list_orders(
             search=search,
             status=status,
         )
+    if user_id is not None and user_id != current_user.id:
+        raise ForbiddenException()
     return service.get_orders(
         db,
         user_id=current_user.id,
