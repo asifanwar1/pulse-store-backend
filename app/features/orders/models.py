@@ -14,9 +14,9 @@ class OrderStatus(str, enum.Enum):
 
 
 class PaymentMethod(str, enum.Enum):
-    card = "card"
-    cod = "cod"
-    bank_transfer = "bank_transfer"
+    card = "CARD"
+    cod = "COD"
+    bank_transfer = "BANK_TRANSFER"
 
 
 class Order(Base):
@@ -25,7 +25,8 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
-    payment_method = Column(Enum(PaymentMethod), default=PaymentMethod.cod, nullable=False)
+    payment_method = Column(Enum(PaymentMethod),
+                            default=PaymentMethod.cod, nullable=False)
     notes = Column(Text, nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
