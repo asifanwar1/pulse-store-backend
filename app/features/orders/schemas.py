@@ -14,13 +14,21 @@ class OrderItemCreate(BaseModel):
 class OrderItemResponse(BaseModel):
     id: int
     product_id: int
+    product_name: str
+    product_sku: str
+    product_category: Optional[str]
     quantity: int
     unit_price: Decimal
+    total_amount: Decimal
 
     model_config = {"from_attributes": True}
 
     @field_serializer("unit_price")
     def serialize_unit_price(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+    @field_serializer("total_amount")
+    def serialize_total_amount(self, value: Decimal) -> str:
         return f"{value:.2f}"
 
 

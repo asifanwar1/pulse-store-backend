@@ -51,42 +51,53 @@ def _to_decimal(value) -> Decimal:
 def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:
     period_start = datetime.now(timezone.utc) - timedelta(days=30)
     orders = db.query(Order.status, Order.total_amount, Order.created_at).all()
-    previous_orders = [order for order in orders if order.created_at and order.created_at < period_start]
+    previous_orders = [
+        order for order in orders if order.created_at and order.created_at < period_start]
 
     current_total = Decimal(len(orders))
     previous_total = Decimal(len(previous_orders))
 
-    current_pending = Decimal(sum(1 for order in orders if order.status == OrderStatus.PENDING))
-    previous_pending = Decimal(sum(1 for order in previous_orders if order.status == OrderStatus.PENDING))
+    current_pending = Decimal(
+        sum(1 for order in orders if order.status == OrderStatus.PENDING))
+    previous_pending = Decimal(
+        sum(1 for order in previous_orders if order.status == OrderStatus.PENDING))
 
-    current_shipped = Decimal(sum(1 for order in orders if order.status == OrderStatus.SHIPPED))
-    previous_shipped = Decimal(sum(1 for order in previous_orders if order.status == OrderStatus.SHIPPED))
+    current_shipped = Decimal(
+        sum(1 for order in orders if order.status == OrderStatus.SHIPPED))
+    previous_shipped = Decimal(
+        sum(1 for order in previous_orders if order.status == OrderStatus.SHIPPED))
 
     current_revenue = sum(
-        (_to_decimal(order.total_amount) for order in orders if order.status != OrderStatus.CANCELLED),
+        (_to_decimal(order.total_amount)
+         for order in orders if order.status != OrderStatus.CANCELLED),
         Decimal("0"),
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     previous_revenue = sum(
-        (_to_decimal(order.total_amount) for order in previous_orders if order.status != OrderStatus.CANCELLED),
+        (_to_decimal(order.total_amount)
+         for order in previous_orders if order.status != OrderStatus.CANCELLED),
         Decimal("0"),
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     return OrderAnalyticsResponse(
         totalOrders=OrderAnalyticsMetric(
             value=int(current_total),
-            change_percentage=_calculate_percentage_change(current_total, previous_total),
+            change_percentage=_calculate_percentage_change(
+                current_total, previous_total),
         ),
         pendingOrders=OrderAnalyticsMetric(
             value=int(current_pending),
-            change_percentage=_calculate_percentage_change(current_pending, previous_pending),
+            change_percentage=_calculate_percentage_change(
+                current_pending, previous_pending),
         ),
         shippedOrders=OrderAnalyticsMetric(
             value=int(current_shipped),
-            change_percentage=_calculate_percentage_change(current_shipped, previous_shipped),
+            change_percentage=_calculate_percentage_change(
+                current_shipped, previous_shipped),
         ),
         revenue=OrderAnalyticsMetric(
             value=current_revenue,
-            change_percentage=_calculate_percentage_change(current_revenue, previous_revenue),
+            change_percentage=_calculate_percentage_change(
+                current_revenue, previous_revenue),
         ),
     )
 
@@ -151,11 +162,13 @@ def create_order(db: Session, order_in: OrderCreate) -> Order:
     total = 0
     resolved_items = []
     for item in order_in.items:
-        product = db.query(Product).filter(Product.id == item.product_id).first()
+        product = db.query(Product).filter(
+            Product.id == item.product_id).first()
         if not product:
             raise NotFoundException(f"Product {item.product_id} not found")
         if product.stock_quantity < item.quantity:
-            raise ConflictException(f"Insufficient stock for product: {product.name}")
+            raise ConflictException(
+                f"Insufficient stock for product: {product.name}")
         total += product.price * item.quantity
         resolved_items.append((product, item.quantity))
 

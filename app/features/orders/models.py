@@ -3,6 +3,7 @@ from sqlalchemy import Column, Integer, Numeric, DateTime, ForeignKey, Enum, Tex
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
+from decimal import Decimal
 
 
 class OrderStatus(str, enum.Enum):
@@ -51,3 +52,19 @@ class OrderItem(Base):
 
     order = relationship("Order", back_populates="items")
     product = relationship("Product", back_populates="order_items")
+
+    @property
+    def product_name(self) -> str:
+        return self.product.name if self.product else ""
+
+    @property
+    def product_sku(self) -> str:
+        return self.product.sku if self.product else ""
+
+    @property
+    def product_category(self) -> str | None:
+        return self.product.category.name if self.product and self.product.category else None
+
+    @property
+    def total_amount(self) -> Decimal:
+        return self.unit_price * self.quantity
