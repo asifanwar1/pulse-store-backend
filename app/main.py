@@ -11,6 +11,7 @@ from app.features.media.router import router as media_router
 from app.features.products.router import router as products_router
 from app.features.orders.router import router as orders_router
 from app.features.cart.router import router as cart_router
+from app.features.shipments.router import router as shipments_router
 
 app = FastAPI(title="Pulse Store API", version="1.0.0")
 
@@ -35,6 +36,8 @@ app.include_router(media_router, prefix="/api/v1/media", tags=["Media"])
 app.include_router(
     products_router, prefix="/api/v1/products", tags=["Products"])
 app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
+app.include_router(
+    shipments_router, prefix="/api/v1/shipments", tags=["Shipments"])
 app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
 
 

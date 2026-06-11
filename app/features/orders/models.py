@@ -35,6 +35,7 @@ class Order(Base):
 
     user = relationship("User", back_populates="orders")
     items = relationship("OrderItem", back_populates="order")
+    shipments = relationship("Shipment", back_populates="order")
 
     @property
     def total_ordered_items(self) -> int:
