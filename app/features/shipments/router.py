@@ -8,6 +8,7 @@ from app.features.auth.dependencies import get_current_admin_user
 from app.features.shipments import service
 from app.features.shipments.models import ShipmentStatus
 from app.features.shipments.schemas import (
+    ShipmentAnalyticsResponse,
     ShipmentCreate,
     ShipmentListResponse,
     ShipmentResponse,
@@ -41,6 +42,11 @@ def list_shipments(
         status=status,
         order_id=order_id,
     )
+
+
+@router.get("/analytics", response_model=ShipmentAnalyticsResponse)
+def get_shipments_analytics(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
+    return service.get_shipments_analytics(db)
 
 
 @router.post("/", response_model=ShipmentResponse, status_code=201)

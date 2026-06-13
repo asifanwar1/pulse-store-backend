@@ -1,8 +1,9 @@
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 from app.features.shipments.models import ShipmentMethod, ShipmentStatus
 
@@ -76,3 +77,19 @@ class ShipmentResponse(BaseModel):
 class ShipmentListResponse(BaseModel):
     data: list[ShipmentResponse]
     count: int
+
+
+class ShipmentAnalyticsMetric(BaseModel):
+    value: int
+    change_percentage: Decimal
+
+    @field_serializer("change_percentage")
+    def serialize_change_percentage(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+
+class ShipmentAnalyticsResponse(BaseModel):
+    totalShipments: ShipmentAnalyticsMetric
+    inTransit: ShipmentAnalyticsMetric
+    delivered: ShipmentAnalyticsMetric
+    failed: ShipmentAnalyticsMetric

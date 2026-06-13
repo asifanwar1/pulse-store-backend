@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from sqlalchemy import String, cast, or_
@@ -8,6 +9,8 @@ from app.core.exceptions import ConflictException, NotFoundException
 from app.features.orders.models import Order, OrderStatus
 from app.features.shipments.models import Shipment, ShipmentStatus
 from app.features.shipments.schemas import (
+    ShipmentAnalyticsMetric,
+    ShipmentAnalyticsResponse,
     ShipmentCreate,
     ShipmentSortDirection,
     ShipmentStatusUpdate,
@@ -36,6 +39,25 @@ SORTABLE_SHIPMENT_COLUMNS = {
     "updated_at": Shipment.updated_at,
     "updatedAt": Shipment.updated_at,
 }
+
+
+IN_TRANSIT_STATUSES = (
+    ShipmentStatus.SHIPPED,
+    ShipmentStatus.IN_TRANSIT,
+    ShipmentStatus.OUT_FOR_DELIVERY,
+)
+FAILED_STATUSES = (
+    ShipmentStatus.CANCELLED,
+    ShipmentStatus.RETURNED,
+)
+
+
+def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
+    if previous == 0:
+        if current == 0:
+            return Decimal("0.00")
+        return Decimal("100.00")
+    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _get_order(db: Session, order_id: int) -> Order:
@@ -68,6 +90,47 @@ def _apply_status_timestamps(shipment: Shipment, status: ShipmentStatus) -> None
         shipment.shipped_at = now
     if status == ShipmentStatus.DELIVERED and shipment.delivered_at is None:
         shipment.delivered_at = now
+
+
+def get_shipments_analytics(db: Session) -> ShipmentAnalyticsResponse:
+    period_start = datetime.now(timezone.utc) - timedelta(days=30)
+    shipments = db.query(Shipment.status, Shipment.created_at).all()
+    previous_shipments = [
+        shipment
+        for shipment in shipments
+        if shipment.created_at and shipment.created_at < period_start
+    ]
+
+    current_total = Decimal(len(shipments))
+    previous_total = Decimal(len(previous_shipments))
+
+    current_in_transit = Decimal(sum(1 for shipment in shipments if shipment.status in IN_TRANSIT_STATUSES))
+    previous_in_transit = Decimal(sum(1 for shipment in previous_shipments if shipment.status in IN_TRANSIT_STATUSES))
+
+    current_delivered = Decimal(sum(1 for shipment in shipments if shipment.status == ShipmentStatus.DELIVERED))
+    previous_delivered = Decimal(sum(1 for shipment in previous_shipments if shipment.status == ShipmentStatus.DELIVERED))
+
+    current_failed = Decimal(sum(1 for shipment in shipments if shipment.status in FAILED_STATUSES))
+    previous_failed = Decimal(sum(1 for shipment in previous_shipments if shipment.status in FAILED_STATUSES))
+
+    return ShipmentAnalyticsResponse(
+        totalShipments=ShipmentAnalyticsMetric(
+            value=int(current_total),
+            change_percentage=_calculate_percentage_change(current_total, previous_total),
+        ),
+        inTransit=ShipmentAnalyticsMetric(
+            value=int(current_in_transit),
+            change_percentage=_calculate_percentage_change(current_in_transit, previous_in_transit),
+        ),
+        delivered=ShipmentAnalyticsMetric(
+            value=int(current_delivered),
+            change_percentage=_calculate_percentage_change(current_delivered, previous_delivered),
+        ),
+        failed=ShipmentAnalyticsMetric(
+            value=int(current_failed),
+            change_percentage=_calculate_percentage_change(current_failed, previous_failed),
+        ),
+    )
 
 
 def get_shipments(
