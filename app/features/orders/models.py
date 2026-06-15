@@ -9,6 +9,7 @@ from decimal import Decimal
 class OrderStatus(str, enum.Enum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
+    SHIPPING = "SHIPPING"
     SHIPPED = "SHIPPED"
     DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
@@ -40,6 +41,22 @@ class Order(Base):
     @property
     def total_ordered_items(self) -> int:
         return sum(item.quantity for item in self.items)
+
+    @property
+    def latest_shipment(self):
+        if not self.shipments:
+            return None
+        return max(self.shipments, key=lambda shipment: shipment.id)
+
+    @property
+    def estimated_delivery_date(self):
+        shipment = self.latest_shipment
+        return shipment.estimated_delivery_date if shipment else None
+
+    @property
+    def shipped_at(self):
+        shipment = self.latest_shipment
+        return shipment.shipped_at if shipment else None
 
 
 class OrderItem(Base):

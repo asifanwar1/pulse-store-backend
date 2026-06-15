@@ -49,9 +49,13 @@ class ShipmentOrderSummary(BaseModel):
     id: int
     user_id: int
     status: str
-    total_amount: str
+    total_amount: Decimal
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("total_amount")
+    def serialize_total_amount(self, value: Decimal) -> str:
+        return f"{value:.2f}"
 
 
 class ShipmentCustomerResponse(BaseModel):

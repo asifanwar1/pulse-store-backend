@@ -83,9 +83,14 @@ def _sync_order_status(order: Order, shipment_status: ShipmentStatus) -> None:
     if shipment_status == ShipmentStatus.DELIVERED:
         order.status = OrderStatus.DELIVERED
     elif shipment_status in (ShipmentStatus.SHIPPED, ShipmentStatus.IN_TRANSIT, ShipmentStatus.OUT_FOR_DELIVERY):
-        order.status = OrderStatus.SHIPPED
-    elif shipment_status == ShipmentStatus.CANCELLED:
+        order.status = OrderStatus.SHIPPING
+    elif shipment_status in (ShipmentStatus.CANCELLED, ShipmentStatus.RETURNED):
         order.status = OrderStatus.CANCELLED
+
+
+def _mark_order_shipping_on_shipment_creation(order: Order) -> None:
+    if order.status in (OrderStatus.PENDING, OrderStatus.PROCESSING):
+        order.status = OrderStatus.SHIPPING
 
 
 def _apply_status_timestamps(shipment: Shipment, status: ShipmentStatus) -> None:
@@ -255,6 +260,7 @@ def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:
         notes=shipment_in.notes,
     )
     _apply_status_timestamps(shipment, shipment.status)
+    _mark_order_shipping_on_shipment_creation(order)
     _sync_order_status(order, shipment.status)
 
     db.add(shipment)

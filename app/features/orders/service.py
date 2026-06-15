@@ -2,7 +2,7 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import String, cast, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.orders.schemas import (
     OrderAnalyticsMetric,
@@ -112,7 +112,7 @@ def get_orders(
     search: Optional[str] = None,
     status: Optional[OrderStatus] = None,
 ) -> dict:
-    query = db.query(Order).join(User)
+    query = db.query(Order).options(selectinload(Order.shipments)).join(User)
 
     if user_id is not None:
         query = query.filter(Order.user_id == user_id)
@@ -148,7 +148,7 @@ def get_orders(
 
 
 def get_order_by_id(db: Session, order_id: int) -> Order:
-    order = db.query(Order).filter(Order.id == order_id).first()
+    order = db.query(Order).options(selectinload(Order.shipments)).filter(Order.id == order_id).first()
     if not order:
         raise NotFoundException("Order not found")
     return order

@@ -89,6 +89,8 @@ class OrderResponse(BaseModel):
     user: OrderUserResponse
     created_at: datetime
     updated_at: Optional[datetime] = None
+    estimated_delivery_date: Optional[datetime] = None
+    shipped_at: Optional[datetime] = None
     items: list[OrderItemResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
