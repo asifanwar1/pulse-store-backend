@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = "4a8f2d6c9b10"
@@ -17,8 +18,8 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-shipment_method = sa.Enum("STANDARD", "EXPRESS", "OVERNIGHT", "PICKUP", name="shipmentmethod")
-shipment_status = sa.Enum(
+shipment_method = postgresql.ENUM("STANDARD", "EXPRESS", "OVERNIGHT", "PICKUP", name="shipmentmethod")
+shipment_status = postgresql.ENUM(
     "PENDING",
     "PROCESSING",
     "SHIPPED",
@@ -28,6 +29,26 @@ shipment_status = sa.Enum(
     "CANCELLED",
     "RETURNED",
     name="shipmentstatus",
+)
+shipment_method_existing = postgresql.ENUM(
+    "STANDARD",
+    "EXPRESS",
+    "OVERNIGHT",
+    "PICKUP",
+    name="shipmentmethod",
+    create_type=False,
+)
+shipment_status_existing = postgresql.ENUM(
+    "PENDING",
+    "PROCESSING",
+    "SHIPPED",
+    "IN_TRANSIT",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "CANCELLED",
+    "RETURNED",
+    name="shipmentstatus",
+    create_type=False,
 )
 
 
@@ -40,9 +61,9 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("order_id", sa.Integer(), nullable=False),
         sa.Column("tracking_id", sa.String(), nullable=False),
-        sa.Column("shipment_method", shipment_method, nullable=False),
+        sa.Column("shipment_method", shipment_method_existing, nullable=False),
         sa.Column("courier", sa.String(), nullable=False),
-        sa.Column("status", shipment_status, nullable=False),
+        sa.Column("status", shipment_status_existing, nullable=False),
         sa.Column("shipping_address", sa.JSON(), nullable=True),
         sa.Column("estimated_delivery_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("shipped_at", sa.DateTime(timezone=True), nullable=True),

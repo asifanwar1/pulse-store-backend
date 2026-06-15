@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
@@ -19,7 +19,6 @@ class ShipmentPayloadBase(BaseModel):
     tracking_id: str
     shipment_method: ShipmentMethod
     courier: str
-    shipping_address: Optional[dict[str, Any]] = None
     estimated_delivery_date: Optional[datetime] = None
     shipped_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
@@ -36,7 +35,6 @@ class ShipmentUpdate(BaseModel):
     shipment_method: Optional[ShipmentMethod] = None
     courier: Optional[str] = None
     status: Optional[ShipmentStatus] = None
-    shipping_address: Optional[dict[str, Any]] = None
     estimated_delivery_date: Optional[datetime] = None
     shipped_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
@@ -62,6 +60,14 @@ class ShipmentCustomerResponse(BaseModel):
     phone: Optional[str] = None
 
 
+class ShipmentAddressResponse(BaseModel):
+    street: str = ""
+    city: str = ""
+    state: str = ""
+    zip: str = ""
+    country: str = ""
+
+
 class ShipmentResponse(BaseModel):
     id: int
     order_id: int
@@ -69,7 +75,7 @@ class ShipmentResponse(BaseModel):
     shipment_method: ShipmentMethod
     courier: str
     status: ShipmentStatus
-    shipping_address: Optional[dict[str, Any]] = None
+    shipment_address: Optional[ShipmentAddressResponse] = None
     estimated_delivery_date: Optional[datetime] = None
     shipped_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None

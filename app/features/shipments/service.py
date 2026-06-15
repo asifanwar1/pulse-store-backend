@@ -11,6 +11,7 @@ from app.features.orders.schemas import OrderItemResponse
 from app.features.products.models import Product
 from app.features.shipments.models import Shipment, ShipmentStatus
 from app.features.shipments.schemas import (
+    ShipmentAddressResponse,
     ShipmentAnalyticsMetric,
     ShipmentAnalyticsResponse,
     ShipmentCustomerResponse,
@@ -95,6 +96,18 @@ def _apply_status_timestamps(shipment: Shipment, status: ShipmentStatus) -> None
         shipment.delivered_at = now
 
 
+def _normalize_shipment_address(address: dict | None) -> ShipmentAddressResponse | None:
+    if not address:
+        return None
+    return ShipmentAddressResponse(
+        street=address.get("street") or address.get("street_address") or "",
+        city=address.get("city") or "",
+        state=address.get("state") or "",
+        zip=address.get("zip") or address.get("zipcode") or "",
+        country=address.get("country") or "",
+    )
+
+
 def _shipment_details_options():
     return (
         joinedload(Shipment.order).joinedload(Order.user),
@@ -123,6 +136,7 @@ def _attach_response_details(shipments: list[Shipment]) -> list[Shipment]:
             if order
             else []
         )
+        shipment.shipment_address = _normalize_shipment_address(user.address if user else None)
     return shipments
 
 
@@ -235,7 +249,6 @@ def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:
         shipment_method=shipment_in.shipment_method,
         courier=shipment_in.courier,
         status=shipment_in.status,
-        shipping_address=shipment_in.shipping_address,
         estimated_delivery_date=shipment_in.estimated_delivery_date,
         shipped_at=shipment_in.shipped_at,
         delivered_at=shipment_in.delivered_at,
@@ -247,7 +260,7 @@ def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:
     db.add(shipment)
     db.commit()
     db.refresh(shipment)
-    return shipment
+    return get_shipment_by_id(db, shipment.id)
 
 
 def update_shipment(db: Session, shipment_id: int, shipment_in: ShipmentUpdate) -> Shipment:
@@ -264,8 +277,6 @@ def update_shipment(db: Session, shipment_id: int, shipment_in: ShipmentUpdate) 
         shipment.shipment_method = update_data["shipment_method"]
     if "courier" in update_data:
         shipment.courier = update_data["courier"]
-    if "shipping_address" in update_data:
-        shipment.shipping_address = update_data["shipping_address"]
     if "estimated_delivery_date" in update_data:
         shipment.estimated_delivery_date = update_data["estimated_delivery_date"]
     if "shipped_at" in update_data:
@@ -281,7 +292,7 @@ def update_shipment(db: Session, shipment_id: int, shipment_in: ShipmentUpdate) 
 
     db.commit()
     db.refresh(shipment)
-    return shipment
+    return get_shipment_by_id(db, shipment.id)
 
 
 def update_shipment_status(db: Session, shipment_id: int, status_in: ShipmentStatusUpdate) -> Shipment:
@@ -291,4 +302,4 @@ def update_shipment_status(db: Session, shipment_id: int, status_in: ShipmentSta
     _sync_order_status(shipment.order, shipment.status)
     db.commit()
     db.refresh(shipment)
-    return shipment
+    return get_shipment_by_id(db, shipment.id)

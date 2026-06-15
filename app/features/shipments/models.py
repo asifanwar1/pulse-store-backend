@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -34,7 +34,6 @@ class Shipment(Base):
     courier = Column(String, nullable=False)
     status = Column(Enum(ShipmentStatus),
                     default=ShipmentStatus.PENDING, nullable=False, index=True)
-    shipping_address = Column(JSON, nullable=True)
     estimated_delivery_date = Column(DateTime(timezone=True), nullable=True)
     shipped_at = Column(DateTime(timezone=True), nullable=True)
     delivered_at = Column(DateTime(timezone=True), nullable=True)
