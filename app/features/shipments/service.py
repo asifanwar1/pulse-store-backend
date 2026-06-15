@@ -3,14 +3,17 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from sqlalchemy import String, cast, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictException, NotFoundException
-from app.features.orders.models import Order, OrderStatus
+from app.features.orders.models import Order, OrderItem, OrderStatus
+from app.features.orders.schemas import OrderItemResponse
+from app.features.products.models import Product
 from app.features.shipments.models import Shipment, ShipmentStatus
 from app.features.shipments.schemas import (
     ShipmentAnalyticsMetric,
     ShipmentAnalyticsResponse,
+    ShipmentCustomerResponse,
     ShipmentCreate,
     ShipmentSortDirection,
     ShipmentStatusUpdate,
@@ -92,6 +95,37 @@ def _apply_status_timestamps(shipment: Shipment, status: ShipmentStatus) -> None
         shipment.delivered_at = now
 
 
+def _shipment_details_options():
+    return (
+        joinedload(Shipment.order).joinedload(Order.user),
+        joinedload(Shipment.order)
+        .selectinload(Order.items)
+        .joinedload(OrderItem.product)
+        .joinedload(Product.category),
+    )
+
+
+def _attach_response_details(shipments: list[Shipment]) -> list[Shipment]:
+    for shipment in shipments:
+        order = shipment.order
+        user = order.user if order else None
+        shipment.customer = (
+            ShipmentCustomerResponse(
+                name=user.full_name,
+                email=user.email,
+                phone=user.phone_number,
+            )
+            if user
+            else None
+        )
+        shipment.ordered_items = (
+            [OrderItemResponse.model_validate(item) for item in order.items]
+            if order
+            else []
+        )
+    return shipments
+
+
 def get_shipments_analytics(db: Session) -> ShipmentAnalyticsResponse:
     period_start = datetime.now(timezone.utc) - timedelta(days=30)
     shipments = db.query(Shipment.status, Shipment.created_at).all()
@@ -143,7 +177,7 @@ def get_shipments(
     status: Optional[ShipmentStatus] = None,
     order_id: Optional[int] = None,
 ) -> dict:
-    query = db.query(Shipment).join(Order)
+    query = db.query(Shipment).options(*_shipment_details_options()).join(Order)
 
     if order_id is not None:
         query = query.filter(Shipment.order_id == order_id)
@@ -175,15 +209,20 @@ def get_shipments(
         query = query.order_by(sort_column.desc())
 
     offset = (page - 1) * limit
-    shipments = query.offset(offset).limit(limit).all()
+    shipments = _attach_response_details(query.offset(offset).limit(limit).all())
     return {"data": shipments, "count": total_count}
 
 
 def get_shipment_by_id(db: Session, shipment_id: int) -> Shipment:
-    shipment = db.query(Shipment).filter(Shipment.id == shipment_id).first()
+    shipment = (
+        db.query(Shipment)
+        .options(*_shipment_details_options())
+        .filter(Shipment.id == shipment_id)
+        .first()
+    )
     if not shipment:
         raise NotFoundException("Shipment not found")
-    return shipment
+    return _attach_response_details([shipment])[0]
 
 
 def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:

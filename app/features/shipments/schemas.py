@@ -3,8 +3,9 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
+from app.features.orders.schemas import OrderItemResponse
 from app.features.shipments.models import ShipmentMethod, ShipmentStatus
 
 
@@ -55,6 +56,12 @@ class ShipmentOrderSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ShipmentCustomerResponse(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+
+
 class ShipmentResponse(BaseModel):
     id: int
     order_id: int
@@ -70,6 +77,8 @@ class ShipmentResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     order: Optional[ShipmentOrderSummary] = None
+    customer: Optional[ShipmentCustomerResponse] = None
+    ordered_items: list[OrderItemResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
