@@ -12,6 +12,7 @@ from app.features.products.router import router as products_router
 from app.features.orders.router import router as orders_router
 from app.features.cart.router import router as cart_router
 from app.features.shipments.router import router as shipments_router
+from app.features.revenue.router import router as revenue_router
 
 app = FastAPI(title="Pulse Store API", version="1.0.0")
 
@@ -38,6 +39,7 @@ app.include_router(
 app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(
     shipments_router, prefix="/api/v1/shipments", tags=["Shipments"])
+app.include_router(revenue_router, prefix="/api/v1/revenue", tags=["Revenue"])
 app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
 
 
