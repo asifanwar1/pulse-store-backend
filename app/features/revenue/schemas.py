@@ -77,6 +77,7 @@ class RevenueShipmentResponse(BaseModel):
 class RevenueResponse(BaseModel):
     id: int
     order_id: int
+    created_at: datetime
     revenue_amount: Decimal
     profit: Decimal
     completed_order: RevenueCompletedOrderResponse

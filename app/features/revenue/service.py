@@ -93,6 +93,17 @@ def _build_item_response(item: OrderItem) -> RevenueOrderItemResponse:
     )
 
 
+def _get_revenue_created_at(order: Order) -> datetime:
+    delivered_dates = [
+        shipment.delivered_at
+        for shipment in order.shipments
+        if shipment.delivered_at is not None
+    ]
+    if delivered_dates:
+        return max(delivered_dates)
+    return order.updated_at or order.created_at
+
+
 def _build_revenue_response(order: Order) -> RevenueResponse:
     customer = None
     if order.user:
@@ -109,6 +120,7 @@ def _build_revenue_response(order: Order) -> RevenueResponse:
     return RevenueResponse(
         id=order.id,
         order_id=order.id,
+        created_at=_get_revenue_created_at(order),
         revenue_amount=_money(order.total_amount),
         profit=profit,
         completed_order=RevenueCompletedOrderResponse(
