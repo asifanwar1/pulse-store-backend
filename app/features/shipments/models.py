@@ -28,7 +28,7 @@ class Shipment(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"),
-                      nullable=False, index=True)
+                      unique=True, nullable=False, index=True)
     tracking_id = Column(String, unique=True, nullable=False, index=True)
     shipment_method = Column(Enum(ShipmentMethod), nullable=False)
     courier = Column(String, nullable=False)

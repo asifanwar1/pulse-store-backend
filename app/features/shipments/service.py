@@ -79,6 +79,14 @@ def _ensure_tracking_id_available(db: Session, tracking_id: str, shipment_id: Op
         raise ConflictException("Shipment tracking ID already exists")
 
 
+def _ensure_order_has_no_shipment(db: Session, order_id: int, shipment_id: Optional[int] = None) -> None:
+    query = db.query(Shipment).filter(Shipment.order_id == order_id)
+    if shipment_id is not None:
+        query = query.filter(Shipment.id != shipment_id)
+    if query.first():
+        raise ConflictException("Order already has a shipment")
+
+
 def _sync_order_status(order: Order, shipment_status: ShipmentStatus) -> None:
     if shipment_status == ShipmentStatus.DELIVERED:
         order.status = OrderStatus.DELIVERED
@@ -246,6 +254,7 @@ def get_shipment_by_id(db: Session, shipment_id: int) -> Shipment:
 
 def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:
     order = _get_order(db, shipment_in.order_id)
+    _ensure_order_has_no_shipment(db, shipment_in.order_id)
     _ensure_tracking_id_available(db, shipment_in.tracking_id)
 
     shipment = Shipment(
@@ -274,6 +283,7 @@ def update_shipment(db: Session, shipment_id: int, shipment_in: ShipmentUpdate) 
     update_data = shipment_in.model_dump(exclude_unset=True)
 
     if "order_id" in update_data:
+        _ensure_order_has_no_shipment(db, update_data["order_id"], shipment.id)
         shipment.order = _get_order(db, update_data["order_id"])
         shipment.order_id = update_data["order_id"]
     if "tracking_id" in update_data and update_data["tracking_id"] != shipment.tracking_id:
