@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.features.cart.models import Cart, CartItem
 from app.features.cart.schemas import CartItemAdd, CartItemUpdate
 from app.features.products.models import Product
@@ -6,12 +6,14 @@ from app.core.exceptions import NotFoundException
 
 
 def get_or_create_cart(db: Session, user_id: int) -> Cart:
-    cart = db.query(Cart).filter(Cart.user_id == user_id).first()
+    cart = db.query(Cart).options(joinedload(Cart.items).joinedload(CartItem.product)).filter(Cart.user_id == user_id).first()
     if not cart:
         cart = Cart(user_id=user_id)
         db.add(cart)
         db.commit()
         db.refresh(cart)
+        # ensure relationships are loaded
+        cart = db.query(Cart).options(joinedload(Cart.items).joinedload(CartItem.product)).filter(Cart.id == cart.id).first()
     return cart
 
 
@@ -29,7 +31,8 @@ def add_item(db: Session, user_id: int, item_in: CartItemAdd) -> Cart:
     else:
         db.add(CartItem(cart_id=cart.id, product_id=item_in.product_id, quantity=item_in.quantity))
     db.commit()
-    db.refresh(cart)
+    # reload cart with items and product relations
+    cart = db.query(Cart).options(joinedload(Cart.items).joinedload(CartItem.product)).filter(Cart.id == cart.id).first()
     return cart
 
 
@@ -40,7 +43,7 @@ def update_item(db: Session, user_id: int, item_id: int, item_in: CartItemUpdate
         raise NotFoundException("Cart item not found")
     item.quantity = item_in.quantity
     db.commit()
-    db.refresh(cart)
+    cart = db.query(Cart).options(joinedload(Cart.items).joinedload(CartItem.product)).filter(Cart.id == cart.id).first()
     return cart
 
 
@@ -51,7 +54,7 @@ def remove_item(db: Session, user_id: int, item_id: int) -> Cart:
         raise NotFoundException("Cart item not found")
     db.delete(item)
     db.commit()
-    db.refresh(cart)
+    cart = db.query(Cart).options(joinedload(Cart.items).joinedload(CartItem.product)).filter(Cart.id == cart.id).first()
     return cart
 
 

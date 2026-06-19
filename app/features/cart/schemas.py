@@ -1,4 +1,7 @@
 from pydantic import BaseModel
+from typing import Optional
+
+from app.features.products.schemas import ProductResponse
 
 
 class CartItemAdd(BaseModel):
@@ -14,6 +17,7 @@ class CartItemResponse(BaseModel):
     id: int
     product_id: int
     quantity: int
+    product: Optional[ProductResponse] = None
 
     model_config = {"from_attributes": True}
 
