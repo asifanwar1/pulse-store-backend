@@ -23,7 +23,7 @@ def get_me(db: Session = Depends(get_db), current_user=Depends(get_current_user)
     return service.get_user_by_id(db, current_user.id)
 
 
-@router.put("/me", response_model=UserResponse)
+@router.patch("/me", response_model=UserResponse)
 def update_me(user_in: UserUpdate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return service.update_user(db, current_user.id, user_in)
 

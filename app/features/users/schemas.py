@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_serializer, model_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
@@ -37,6 +37,21 @@ class Address(BaseModel):
     longitude: str = ""
 
 
+class AddressUpdate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    street_address: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    state: Optional[str] = None
+    zipcode: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("zipcode", "zipCode", "zip_code"),
+    )
+    latitude: Optional[str] = None
+    longitude: Optional[str] = None
+
+
 class UserBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -55,11 +70,46 @@ class UserUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     email: Optional[str] = None
-    full_name: Optional[str] = Field(default=None, alias="fullName")
-    phone_number: Optional[str] = Field(default=None, alias="phoneNumber")
-    address: Optional[Address] = None
-    user_type: Optional[str] = Field(default=None, alias="userType")
+    full_name: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("fullName", "full_name"),
+    )
+    phone_number: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("phoneNumber", "phone_number", "phone", "Phone"),
+    )
+    address: Optional[AddressUpdate] = None
+    user_type: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("userType", "user_type"),
+    )
     password: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def collect_address_fields(cls, data):
+        if not isinstance(data, dict):
+            return data
+
+        address_keys = {
+            "street_address",
+            "city",
+            "country",
+            "state",
+            "zipcode",
+            "zipCode",
+            "zip_code",
+            "latitude",
+            "longitude",
+        }
+        address = dict(data.get("address") or {})
+        for key in address_keys:
+            if key in data:
+                address[key] = data[key]
+
+        if address:
+            return {**data, "address": address}
+        return data
 
 
 class UserStatusUpdate(BaseModel):

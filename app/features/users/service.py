@@ -219,7 +219,9 @@ def update_user(db: Session, user_id: int, user_in: UserUpdate) -> User:
     if user_in.phone_number is not None:
         user.phone_number = user_in.phone_number
     if user_in.address is not None:
-        user.address = user_in.address.model_dump()
+        current_address = user.address if isinstance(user.address, dict) else {}
+        address_updates = user_in.address.model_dump(exclude_unset=True, exclude_none=True)
+        user.address = {**current_address, **address_updates}
     if user_in.user_type is not None:
         user.user_type = user_in.user_type
     if user_in.password is not None:
