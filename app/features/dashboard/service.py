@@ -10,6 +10,7 @@ from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.products.models import Product
 from app.features.shipments.models import Shipment
 from app.features.users.models import User, UserType
+from app.core.money import to_decimal
 from app.features.dashboard.schemas import (
     CustomerGrowthItem,
     CustomerGrowthResponse,
@@ -34,20 +35,12 @@ MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def _to_decimal(value) -> Decimal:
-    if value is None:
-        return Decimal("0")
-    if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value))
-
-
 def _money(value) -> Decimal:
-    return _to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _percentage(value) -> Decimal:
-    return _to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
@@ -107,7 +100,7 @@ def _order_expense(order: Order) -> Decimal:
     return _money(
         sum(
             (
-                _to_decimal(item.product.cost_price if item.product else 0) * Decimal(item.quantity)
+                to_decimal(item.product.cost_price if item.product else 0) * Decimal(item.quantity)
                 for item in order.items
             ),
             Decimal("0"),
@@ -140,9 +133,9 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
         if order.created_at and previous_period_start <= _as_aware(order.created_at) < period_start
     ]
 
-    total_revenue = _money(sum((_to_decimal(order.total_amount) for order in delivered_orders), Decimal("0")))
-    current_revenue = _money(sum((_to_decimal(order.total_amount) for order in current_delivered), Decimal("0")))
-    previous_revenue = _money(sum((_to_decimal(order.total_amount) for order in previous_delivered), Decimal("0")))
+    total_revenue = _money(sum((to_decimal(order.total_amount) for order in delivered_orders), Decimal("0")))
+    current_revenue = _money(sum((to_decimal(order.total_amount) for order in current_delivered), Decimal("0")))
+    previous_revenue = _money(sum((to_decimal(order.total_amount) for order in previous_delivered), Decimal("0")))
 
     total_customers = _customer_count_query(db).count()
     current_customers = _customer_count_query(db).filter(User.created_at >= period_start).count()
@@ -228,7 +221,7 @@ def get_revenue_overview(db: Session, year: int) -> RevenueOverviewResponse:
         if not revenue_date or revenue_date < start or revenue_date >= end:
             continue
         month_values = monthly[revenue_date.month]
-        month_values["revenue"] += _to_decimal(order.total_amount)
+        month_values["revenue"] += to_decimal(order.total_amount)
         month_values["expenses"] += _order_expense(order)
 
     data = [
@@ -258,7 +251,7 @@ def get_orders_by_category(db: Session, year: int) -> OrdersByCategoryResponse:
             category = product.category if product else None
             key = (category.id if category else None, category.name if category else "Uncategorized")
             category_data[key]["orders"].add(order.id)
-            category_data[key]["revenue"] += _to_decimal(item.unit_price) * Decimal(item.quantity)
+            category_data[key]["revenue"] += to_decimal(item.unit_price) * Decimal(item.quantity)
 
     data = [
         OrdersByCategoryItem(
@@ -275,14 +268,14 @@ def get_orders_by_category(db: Session, year: int) -> OrdersByCategoryResponse:
 
 def get_sales_distribution(db: Session, year: int) -> SalesDistributionResponse:
     orders_by_category = get_orders_by_category(db, year).data
-    total_revenue = sum((_to_decimal(item.revenue) for item in orders_by_category), Decimal("0"))
+    total_revenue = sum((to_decimal(item.revenue) for item in orders_by_category), Decimal("0"))
 
     data = [
         SalesDistributionItem(
             category_id=item.category_id,
             category=item.category,
             revenue=_money(item.revenue),
-            percentage=_percentage(_to_decimal(item.revenue) / total_revenue * Decimal("100") if total_revenue else 0),
+            percentage=_percentage(to_decimal(item.revenue) / total_revenue * Decimal("100") if total_revenue else 0),
         )
         for item in orders_by_category
     ]
@@ -338,7 +331,7 @@ def get_weekly_sales(db: Session, target_date: date | None = None) -> WeeklySale
         if not revenue_date or revenue_date < week_start or revenue_date >= week_end_exclusive:
             continue
         values = daily[revenue_date.weekday()]
-        values["revenue"] += _to_decimal(order.total_amount)
+        values["revenue"] += to_decimal(order.total_amount)
         values["orders"] += 1
 
     data = [
@@ -375,7 +368,7 @@ def get_top_products(db: Session, limit: int = 6) -> TopProductsResponse:
             product = item.product
             if not product:
                 continue
-            item_revenue = _to_decimal(item.unit_price) * Decimal(item.quantity)
+            item_revenue = to_decimal(item.unit_price) * Decimal(item.quantity)
             values = product_data[product.id]
             values["product"] = product
             values["revenue"] += item_revenue

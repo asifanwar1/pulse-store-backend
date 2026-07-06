@@ -6,6 +6,7 @@ from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.exceptions import NotFoundException
+from app.core.money import to_decimal
 from app.features.orders.models import Order, OrderItem, OrderStatus, PaymentMethod
 from app.features.products.models import Product
 from app.features.revenue.schemas import (
@@ -42,16 +43,8 @@ SORTABLE_REVENUE_COLUMNS = {
 }
 
 
-def _to_decimal(value) -> Decimal:
-    if value is None:
-        return Decimal("0")
-    if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value))
-
-
 def _money(value) -> Decimal:
-    return _to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
@@ -180,8 +173,8 @@ def get_revenue_analytics(db: Session) -> RevenueAnalyticsResponse:
 
     current_completed_orders = Decimal(len(orders))
     previous_completed_orders = Decimal(len(previous_orders))
-    current_revenue = _money(sum((_to_decimal(order.total_amount) for order in orders), Decimal("0")))
-    previous_revenue = _money(sum((_to_decimal(order.total_amount) for order in previous_orders), Decimal("0")))
+    current_revenue = _money(sum((to_decimal(order.total_amount) for order in orders), Decimal("0")))
+    previous_revenue = _money(sum((to_decimal(order.total_amount) for order in previous_orders), Decimal("0")))
     current_profit = _money(sum((_calculate_order_profit(order) for order in orders), Decimal("0")))
     previous_profit = _money(sum((_calculate_order_profit(order) for order in previous_orders), Decimal("0")))
 

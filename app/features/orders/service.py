@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session, selectinload
+from app.features.offers import service as offers_service
 from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.orders.schemas import (
     OrderAnalyticsMetric,
@@ -14,6 +15,7 @@ from app.features.orders.schemas import (
 from app.features.products.models import Product
 from app.features.users.models import User
 from app.core.exceptions import NotFoundException, ConflictException
+from app.core.money import to_decimal
 
 
 SORTABLE_ORDER_COLUMNS = {
@@ -40,14 +42,6 @@ def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal
     return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _to_decimal(value) -> Decimal:
-    if value is None:
-        return Decimal("0")
-    if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value))
-
-
 def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:
     period_start = datetime.now(timezone.utc) - timedelta(days=30)
     orders = db.query(Order.status, Order.total_amount, Order.created_at).all()
@@ -68,12 +62,12 @@ def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:
         sum(1 for order in previous_orders if order.status == OrderStatus.SHIPPED))
 
     current_revenue = sum(
-        (_to_decimal(order.total_amount)
+        (to_decimal(order.total_amount)
          for order in orders if order.status != OrderStatus.CANCELLED),
         Decimal("0"),
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     previous_revenue = sum(
-        (_to_decimal(order.total_amount)
+        (to_decimal(order.total_amount)
          for order in previous_orders if order.status != OrderStatus.CANCELLED),
         Decimal("0"),
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -159,19 +153,22 @@ def create_order(db: Session, order_in: OrderCreate) -> Order:
     if not user:
         raise NotFoundException(f"User {order_in.user_id} not found")
 
-    total = 0
+    product_ids = {item.product_id for item in order_in.items}
+    products_by_id = {product.id: product for product in db.query(Product).filter(Product.id.in_(product_ids)).all()}
+
     resolved_items = []
     for item in order_in.items:
-        product = db.query(Product).filter(
-            Product.id == item.product_id).first()
+        product = products_by_id.get(item.product_id)
         if not product:
             raise NotFoundException(f"Product {item.product_id} not found")
         if product.stock_quantity < item.quantity:
             raise ConflictException(
                 f"Insufficient stock for product: {product.name}")
-        total += product.price * item.quantity
         resolved_items.append((product, item.quantity))
 
+    offer_matches = offers_service.compute_offer_matches(db, [product for product, _ in resolved_items])
+
+    total = Decimal("0")
     order = Order(
         user_id=order_in.user_id,
         total_amount=total,
@@ -182,14 +179,18 @@ def create_order(db: Session, order_in: OrderCreate) -> Order:
     db.flush()
 
     for product, quantity in resolved_items:
+        match = offer_matches.get(product.id)
+        unit_price = match.discounted_price if match else to_decimal(product.price)
+        total += unit_price * quantity
         db.add(OrderItem(
             order_id=order.id,
             product_id=product.id,
             quantity=quantity,
-            unit_price=product.price,
+            unit_price=unit_price,
         ))
         product.stock_quantity -= quantity
 
+    order.total_amount = total
     db.commit()
     db.refresh(order)
     return order

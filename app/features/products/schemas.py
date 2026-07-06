@@ -86,6 +86,9 @@ class ProductResponse(ProductPayloadBase):
     status: str
     total_sales: int = 0
     rating: Optional[int] = None
+    discount_percentage: Optional[Decimal] = None
+    discounted_price: Optional[Decimal] = None
+    offer_name: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -93,6 +96,12 @@ class ProductResponse(ProductPayloadBase):
 
     @field_serializer("retail_price", "cost_price")
     def serialize_prices(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+    @field_serializer("discount_percentage", "discounted_price")
+    def serialize_discount_fields(self, value: Optional[Decimal]) -> Optional[str]:
+        if value is None:
+            return None
         return f"{value:.2f}"
 
 

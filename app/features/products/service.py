@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.categories.models import Category
+from app.features.offers import service as offers_service
 from app.features.products.models import Product, ProductReview
 from app.features.products.schemas import (
     ProductAnalyticsMetric,
@@ -22,6 +23,7 @@ from app.features.products.schemas import (
     ProductUpdate,
 )
 from app.core.exceptions import BadRequestException, NotFoundException, ConflictException
+from app.core.money import to_decimal
 import re
 
 
@@ -75,14 +77,6 @@ def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal
     return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _to_decimal(value) -> Decimal:
-    if value is None:
-        return Decimal("0")
-    if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value))
-
-
 def get_products_analytics(db: Session) -> ProductAnalyticsResponse:
     period_start = datetime.now(timezone.utc) - timedelta(days=30)
 
@@ -99,12 +93,12 @@ def get_products_analytics(db: Session) -> ProductAnalyticsResponse:
     previous_out_of_stock = Decimal(sum(1 for product in previous_products if product.stock_quantity <= 0))
 
     current_average_price = (
-        sum((_to_decimal(product.price) for product in all_products), Decimal("0")) / current_total
+        sum((to_decimal(product.price) for product in all_products), Decimal("0")) / current_total
         if all_products
         else Decimal("0")
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     previous_average_price = (
-        sum((_to_decimal(product.price) for product in previous_products), Decimal("0")) / previous_total
+        sum((to_decimal(product.price) for product in previous_products), Decimal("0")) / previous_total
         if previous_products
         else Decimal("0")
     ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -179,6 +173,7 @@ def get_products(
 
     offset = (page - 1) * limit
     products = query.offset(offset).limit(limit).all()
+    offers_service.annotate_products_with_offers(db, products)
     return {"data": products, "count": total_count}
 
 
@@ -186,6 +181,7 @@ def get_product_by_id(db: Session, product_id: int) -> Product:
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise NotFoundException("Product not found")
+    offers_service.annotate_products_with_offers(db, [product])
     return product
 
 
@@ -207,13 +203,13 @@ def get_product_monthly_sales(db: Session, product_id: int) -> ProductMonthlySal
         if month not in monthly_sales:
             monthly_sales[month] = {"quantity_sold": 0, "revenue": Decimal("0")}
         monthly_sales[month]["quantity_sold"] += quantity
-        monthly_sales[month]["revenue"] += _to_decimal(unit_price) * Decimal(quantity)
+        monthly_sales[month]["revenue"] += to_decimal(unit_price) * Decimal(quantity)
 
     data = [
         ProductMonthlySalesItem(
             month=month,
             quantity_sold=int(values["quantity_sold"]),
-            revenue=_to_decimal(values["revenue"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+            revenue=to_decimal(values["revenue"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
         )
         for month, values in sorted(monthly_sales.items())
     ]
@@ -299,6 +295,7 @@ def create_product(db: Session, product_in: ProductCreate) -> Product:
     db.add(product)
     db.commit()
     db.refresh(product)
+    offers_service.annotate_products_with_offers(db, [product])
     return product
 
 
@@ -340,10 +337,12 @@ def update_product(db: Session, product_id: int, product_in: ProductUpdate) -> P
 
     db.commit()
     db.refresh(product)
+    offers_service.annotate_products_with_offers(db, [product])
     return product
 
 
 def delete_product(db: Session, product_id: int) -> None:
     product = get_product_by_id(db, product_id)
+    offers_service.remove_product_offer_links(db, product_id)
     db.delete(product)
     db.commit()
