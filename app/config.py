@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_STORAGE_BUCKET: str = "product-media"
 
+    # Stripe (test/sandbox mode)
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    DEFAULT_CURRENCY: str = "usd"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

@@ -19,6 +19,13 @@ class PaymentMethod(str, enum.Enum):
     card = "CARD"
     cod = "COD"
     bank_transfer = "BANK_TRANSFER"
+    wallet = "WALLET"
+
+
+class OrderPaymentStatus(str, enum.Enum):
+    UNPAID = "UNPAID"
+    PAID = "PAID"
+    REFUNDED = "REFUNDED"
 
 
 class Order(Base):
@@ -29,6 +36,7 @@ class Order(Base):
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
     payment_method = Column(Enum(PaymentMethod),
                             default=PaymentMethod.cod, nullable=False)
+    payment_status = Column(Enum(OrderPaymentStatus), default=OrderPaymentStatus.UNPAID, nullable=False)
     notes = Column(Text, nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

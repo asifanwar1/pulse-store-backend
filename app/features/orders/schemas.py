@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from app.features.orders.models import OrderStatus, PaymentMethod
+from app.features.orders.models import OrderPaymentStatus, OrderStatus, PaymentMethod
 
 
 class OrderItemCreate(BaseModel):
@@ -83,6 +83,7 @@ class OrderResponse(BaseModel):
     user_id: int
     status: OrderStatus
     payment_method: PaymentMethod
+    payment_status: OrderPaymentStatus
     notes: Optional[str] = None
     total_amount: Decimal
     total_ordered_items: int = Field(serialization_alias="totalOrderedItems")
