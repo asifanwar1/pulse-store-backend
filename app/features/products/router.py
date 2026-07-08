@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.products import service
 from app.features.products.schemas import (
+    CategoriesWithNewProductsResponse,
     ProductAnalyticsResponse,
     ProductCategoryFilter,
     ProductCreate,
@@ -50,6 +51,11 @@ def list_products(
 @router.get("/analytics", response_model=ProductAnalyticsResponse)
 def get_products_analytics(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
     return service.get_products_analytics(db)
+
+
+@router.get("/categories/new-this-week", response_model=CategoriesWithNewProductsResponse)
+def get_categories_with_new_products_this_week(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
+    return service.get_categories_with_new_products_this_week(db)
 
 
 @router.post("/", response_model=ProductResponse, status_code=201)

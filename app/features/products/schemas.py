@@ -169,3 +169,15 @@ class ProductReviewsResponse(BaseModel):
         if value is None:
             return None
         return f"{value:.2f}"
+
+
+class CategoryNewProductsItem(BaseModel):
+    id: int
+    name: str
+    slug: str
+    new_products_count: int
+
+
+class CategoriesWithNewProductsResponse(BaseModel):
+    data: list[CategoryNewProductsItem]
+    count: int

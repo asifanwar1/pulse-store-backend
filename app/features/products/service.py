@@ -1,13 +1,15 @@
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.categories.models import Category
 from app.features.offers import service as offers_service
 from app.features.products.models import Product, ProductReview
 from app.features.products.schemas import (
+    CategoriesWithNewProductsResponse,
+    CategoryNewProductsItem,
     ProductAnalyticsMetric,
     ProductAnalyticsResponse,
     ProductCategoryFilter,
@@ -121,6 +123,31 @@ def get_products_analytics(db: Session) -> ProductAnalyticsResponse:
             change_percentage=_calculate_percentage_change(current_average_price, previous_average_price),
         ),
     )
+
+
+def get_categories_with_new_products_this_week(db: Session) -> CategoriesWithNewProductsResponse:
+    now = datetime.now(timezone.utc)
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    rows = (
+        db.query(Category, func.count(Product.id).label("new_products_count"))
+        .join(Product, Product.category_id == Category.id)
+        .filter(Product.created_at >= week_start)
+        .group_by(Category.id)
+        .order_by(Category.name.asc())
+        .all()
+    )
+
+    data = [
+        CategoryNewProductsItem(
+            id=category.id,
+            name=category.name,
+            slug=category.slug,
+            new_products_count=new_products_count,
+        )
+        for category, new_products_count in rows
+    ]
+    return CategoriesWithNewProductsResponse(data=data, count=len(data))
 
 
 def get_products(
