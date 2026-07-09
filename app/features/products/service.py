@@ -5,6 +5,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.categories.models import Category
+from app.features.favourites import service as favourites_service
 from app.features.offers import service as offers_service
 from app.features.products.models import Product, ProductReview
 from app.features.products.schemas import (
@@ -371,5 +372,6 @@ def update_product(db: Session, product_id: int, product_in: ProductUpdate) -> P
 def delete_product(db: Session, product_id: int) -> None:
     product = get_product_by_id(db, product_id)
     offers_service.remove_product_offer_links(db, product_id)
+    favourites_service.remove_product_favourite_links(db, product_id)
     db.delete(product)
     db.commit()

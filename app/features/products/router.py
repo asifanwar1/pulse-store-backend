@@ -54,7 +54,7 @@ def get_products_analytics(db: Session = Depends(get_db), _=Depends(get_current_
 
 
 @router.get("/categories/new-this-week", response_model=CategoriesWithNewProductsResponse)
-def get_categories_with_new_products_this_week(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
+def get_categories_with_new_products_this_week(db: Session = Depends(get_db)):
     return service.get_categories_with_new_products_this_week(db)
 
 
