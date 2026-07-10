@@ -10,15 +10,17 @@ from app.features.products.schemas import (
     ProductCreate,
     ProductListResponse,
     ProductMonthlySalesResponse,
-    ProductRatingUpdate,
     ProductResponse,
+    ProductReviewCreate,
+    ProductReviewResponse,
     ProductReviewsResponse,
     ProductSortDirection,
     ProductStatusFilter,
     ProductTotalSalesUpdate,
     ProductUpdate,
 )
-from app.features.auth.dependencies import get_current_admin_user
+from app.features.auth.dependencies import get_current_admin_user, get_current_user
+from app.features.users.models import User
 
 router = APIRouter()
 
@@ -78,14 +80,19 @@ def get_product_customer_reviews(product_id: int, db: Session = Depends(get_db))
     return service.get_product_customer_reviews(db, product_id)
 
 
+@router.post("/{product_id}/reviews", response_model=ProductReviewResponse)
+def create_product_review(
+    product_id: int,
+    review_in: ProductReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.create_or_update_product_review(db, product_id, current_user.id, review_in)
+
+
 @router.patch("/{product_id}/total-sales", response_model=ProductResponse)
 def update_product_total_sales(product_id: int, sales_in: ProductTotalSalesUpdate, db: Session = Depends(get_db)):
     return service.update_product_total_sales(db, product_id, sales_in)
-
-
-@router.patch("/{product_id}/rating", response_model=ProductResponse)
-def update_product_rating(product_id: int, rating_in: ProductRatingUpdate, db: Session = Depends(get_db)):
-    return service.update_product_rating(db, product_id, rating_in)
 
 
 @router.patch("/{product_id}", response_model=ProductResponse)

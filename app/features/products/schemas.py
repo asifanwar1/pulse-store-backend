@@ -74,10 +74,6 @@ class ProductTotalSalesUpdate(BaseModel):
     total_sales: int = Field(..., ge=0)
 
 
-class ProductRatingUpdate(BaseModel):
-    rating: int = Field(..., ge=1, le=5)
-
-
 class ProductResponse(ProductPayloadBase):
     id: int
     slug: str
@@ -85,7 +81,7 @@ class ProductResponse(ProductPayloadBase):
     category_name: Optional[str] = None
     status: str
     total_sales: int = 0
-    rating: Optional[int] = None
+    rating: Optional[Decimal] = None
     discount_percentage: Optional[Decimal] = None
     discounted_price: Optional[Decimal] = None
     offer_name: Optional[str] = None
@@ -98,8 +94,8 @@ class ProductResponse(ProductPayloadBase):
     def serialize_prices(self, value: Decimal) -> str:
         return f"{value:.2f}"
 
-    @field_serializer("discount_percentage", "discounted_price")
-    def serialize_discount_fields(self, value: Optional[Decimal]) -> Optional[str]:
+    @field_serializer("discount_percentage", "discounted_price", "rating")
+    def serialize_optional_decimal_fields(self, value: Optional[Decimal]) -> Optional[str]:
         if value is None:
             return None
         return f"{value:.2f}"
@@ -146,6 +142,11 @@ class ProductMonthlySalesResponse(BaseModel):
     product_id: int
     data: list[ProductMonthlySalesItem]
     count: int
+
+
+class ProductReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    comment: Optional[str] = None
 
 
 class ProductReviewResponse(BaseModel):

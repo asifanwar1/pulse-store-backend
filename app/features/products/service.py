@@ -17,7 +17,7 @@ from app.features.products.schemas import (
     ProductCreate,
     ProductMonthlySalesItem,
     ProductMonthlySalesResponse,
-    ProductRatingUpdate,
+    ProductReviewCreate,
     ProductReviewsResponse,
     ProductReviewResponse,
     ProductSortDirection,
@@ -25,7 +25,7 @@ from app.features.products.schemas import (
     ProductTotalSalesUpdate,
     ProductUpdate,
 )
-from app.core.exceptions import BadRequestException, NotFoundException, ConflictException
+from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException, ConflictException
 from app.core.money import to_decimal
 import re
 
@@ -250,7 +250,7 @@ def get_product_customer_reviews(db: Session, product_id: int) -> ProductReviews
 
     reviews = (
         db.query(ProductReview)
-        .filter(ProductReview.product_id == product_id)
+        .filter(ProductReview.product_id == product_id, ProductReview.is_hidden.is_(False))
         .order_by(ProductReview.created_at.desc())
         .all()
     )
@@ -285,12 +285,69 @@ def update_product_total_sales(db: Session, product_id: int, sales_in: ProductTo
     return product
 
 
-def update_product_rating(db: Session, product_id: int, rating_in: ProductRatingUpdate) -> Product:
-    product = get_product_by_id(db, product_id)
-    product.rating = rating_in.rating
+def recalculate_product_rating(db: Session, product_id: int) -> None:
+    average_rating = (
+        db.query(func.avg(ProductReview.rating))
+        .filter(ProductReview.product_id == product_id, ProductReview.is_hidden.is_(False))
+        .scalar()
+    )
+    product = db.query(Product).filter(Product.id == product_id).first()
+    product.rating = (
+        to_decimal(average_rating).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if average_rating is not None
+        else None
+    )
     db.commit()
-    db.refresh(product)
-    return product
+
+
+def create_or_update_product_review(db: Session, product_id: int, user_id: int, review_in: ProductReviewCreate) -> ProductReviewResponse:
+    get_product_by_id(db, product_id)
+
+    has_delivered_order = (
+        db.query(OrderItem)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(
+            OrderItem.product_id == product_id,
+            Order.user_id == user_id,
+            Order.status == OrderStatus.DELIVERED,
+        )
+        .first()
+        is not None
+    )
+    if not has_delivered_order:
+        raise ForbiddenException("You can only review products from a delivered order")
+
+    review = (
+        db.query(ProductReview)
+        .filter(ProductReview.product_id == product_id, ProductReview.user_id == user_id)
+        .first()
+    )
+    if review:
+        review.rating = review_in.rating
+        review.comment = review_in.comment
+    else:
+        review = ProductReview(
+            product_id=product_id,
+            user_id=user_id,
+            rating=review_in.rating,
+            comment=review_in.comment,
+        )
+        db.add(review)
+    db.commit()
+    db.refresh(review)
+
+    recalculate_product_rating(db, product_id)
+    db.refresh(review)
+
+    return ProductReviewResponse(
+        id=review.id,
+        product_id=review.product_id,
+        user_id=review.user_id,
+        customer_name=review.user.full_name,
+        rating=review.rating,
+        comment=review.comment,
+        created_at=review.created_at,
+    )
 
 
 def create_product(db: Session, product_in: ProductCreate) -> Product:

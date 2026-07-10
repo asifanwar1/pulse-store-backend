@@ -17,6 +17,7 @@ from app.features.dashboard.router import router as dashboard_router
 from app.features.offers.router import router as offers_router
 from app.features.wallet.router import router as wallet_router
 from app.features.favourites.router import router as favourites_router
+from app.features.reviews.router import router as reviews_router
 
 app = FastAPI(title="Pulse Store API", version="1.0.0")
 
@@ -49,6 +50,7 @@ app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
 app.include_router(offers_router, prefix="/api/v1/offers", tags=["Offers"])
 app.include_router(wallet_router, prefix="/api/v1/wallet", tags=["Wallet"])
 app.include_router(favourites_router, prefix="/api/v1/favourites", tags=["Favourites"])
+app.include_router(reviews_router, prefix="/api/v1/reviews", tags=["Reviews"])
 
 
 @app.get("/")
