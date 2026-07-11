@@ -23,7 +23,7 @@ app = FastAPI(title="Pulse Store API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5176"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,11 +45,13 @@ app.include_router(orders_router, prefix="/api/v1/orders", tags=["Orders"])
 app.include_router(
     shipments_router, prefix="/api/v1/shipments", tags=["Shipments"])
 app.include_router(revenue_router, prefix="/api/v1/revenue", tags=["Revenue"])
-app.include_router(dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(
+    dashboard_router, prefix="/api/v1/dashboard", tags=["Dashboard"])
 app.include_router(cart_router, prefix="/api/v1/cart", tags=["Cart"])
 app.include_router(offers_router, prefix="/api/v1/offers", tags=["Offers"])
 app.include_router(wallet_router, prefix="/api/v1/wallet", tags=["Wallet"])
-app.include_router(favourites_router, prefix="/api/v1/favourites", tags=["Favourites"])
+app.include_router(favourites_router,
+                   prefix="/api/v1/favourites", tags=["Favourites"])
 app.include_router(reviews_router, prefix="/api/v1/reviews", tags=["Reviews"])
 
 

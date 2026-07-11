@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -12,6 +12,7 @@ class Category(Base):
     slug = Column(String, unique=True, nullable=False, index=True)
     description = Column(Text, nullable=True)
     parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    image = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     parent = relationship("Category", remote_side=[id], back_populates="children")
