@@ -12,6 +12,7 @@ from app.features.orders.models import Order, OrderItem  # noqa: F401
 from app.features.shipments.models import Shipment  # noqa: F401
 from app.features.cart.models import Cart, CartItem  # noqa: F401
 from app.features.auth.models import OTPCode  # noqa: F401
+from app.features.banners.models import Banner  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
