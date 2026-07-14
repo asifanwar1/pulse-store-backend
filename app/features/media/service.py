@@ -1,8 +1,10 @@
+import io
 import re
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import UploadFile
+from PIL import Image, UnidentifiedImageError
 from supabase import Client, create_client
 
 from app.config import settings
@@ -10,10 +12,10 @@ from app.core.exceptions import BadRequestException
 from app.features.media.schemas import MediaUploadResponse
 
 
-ALLOWED_IMAGE_CONTENT_TYPES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-}
+ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP"}
+OUTPUT_CONTENT_TYPE = "image/webp"
+OUTPUT_QUALITY = 85  # visually lossless at this quality; ~60-80% smaller than source PNG
+MAX_DIMENSION = 2000  # longest side, px — guards against oversized canvas exports
 
 _supabase_client: Client | None = None
 
@@ -39,29 +41,51 @@ def _normalize_folder(folder: str) -> str:
     return normalized
 
 
+def _optimize_image(file_bytes: bytes) -> bytes:
+    try:
+        image = Image.open(io.BytesIO(file_bytes))
+        image.load()
+    except UnidentifiedImageError:
+        raise BadRequestException("Uploaded file is not a valid image")
+
+    # Sniff the real format instead of trusting the client's declared content-type.
+    if image.format not in ALLOWED_IMAGE_FORMATS:
+        raise BadRequestException("Only JPEG, PNG, and WEBP images are supported")
+
+    has_alpha = image.mode in ("RGBA", "LA") or (
+        image.mode == "P" and "transparency" in image.info)
+    if image.mode not in ("RGB", "RGBA"):
+        image = image.convert("RGBA" if has_alpha else "RGB")
+
+    width, height = image.size
+    if max(width, height) > MAX_DIMENSION:
+        scale = MAX_DIMENSION / max(width, height)
+        image = image.resize(
+            (round(width * scale), round(height * scale)), Image.LANCZOS)
+
+    # Re-encoding via Pillow (without passing exif=) drops any EXIF metadata as a side effect.
+    buffer = io.BytesIO()
+    image.save(buffer, format="WEBP", quality=OUTPUT_QUALITY, method=6)
+    return buffer.getvalue()
+
+
 def upload_media(file: UploadFile, folder: str = "general") -> MediaUploadResponse:
-    if file.content_type not in ALLOWED_IMAGE_CONTENT_TYPES:
-        raise BadRequestException(
-            "Only JPEG and PNG images are supported")
-
-    file_extension = Path(file.filename or "").suffix.lower()
-    if not file_extension:
-        file_extension = ALLOWED_IMAGE_CONTENT_TYPES[file.content_type]
-
     file_bytes = file.file.read()
     if not file_bytes:
         raise BadRequestException("Uploaded file is empty")
 
+    optimized_bytes = _optimize_image(file_bytes)
+
     normalized_folder = _normalize_folder(folder)
-    storage_path = f"{normalized_folder}/{uuid4().hex}{file_extension}"
+    storage_path = f"{normalized_folder}/{uuid4().hex}.webp"
 
     bucket_name = settings.SUPABASE_STORAGE_BUCKET
     bucket = _get_supabase_client().storage.from_(bucket_name)
     bucket.upload(
         path=storage_path,
-        file=file_bytes,
+        file=optimized_bytes,
         file_options={
-            "content-type": file.content_type,
+            "content-type": OUTPUT_CONTENT_TYPE,
             "upsert": "false",
         },
     )
@@ -70,7 +94,7 @@ def upload_media(file: UploadFile, folder: str = "general") -> MediaUploadRespon
     return MediaUploadResponse(
         id=storage_path,
         url=public_url,
-        file_name=file.filename or Path(storage_path).name,
+        file_name=Path(storage_path).name,
         bucket=bucket_name,
         path=storage_path,
     )
