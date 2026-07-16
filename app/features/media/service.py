@@ -45,7 +45,9 @@ def _optimize_image(file_bytes: bytes) -> bytes:
     try:
         image = Image.open(io.BytesIO(file_bytes))
         image.load()
-    except UnidentifiedImageError:
+    except Image.DecompressionBombError:
+        raise BadRequestException("Image resolution is too large")
+    except (UnidentifiedImageError, OSError, ValueError):
         raise BadRequestException("Uploaded file is not a valid image")
 
     # Sniff the real format instead of trusting the client's declared content-type.
