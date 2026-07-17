@@ -6,10 +6,12 @@ from app.features.orders import service
 from app.features.orders.schemas import (
     OrderAnalyticsResponse,
     OrderCreate,
+    OrderDetailResponse,
     OrderListResponse,
     OrderSortDirection,
     OrderStatusUpdate,
     OrderResponse,
+    OrderTrackingResponse,
 )
 from app.features.orders.models import OrderStatus
 from app.features.auth.dependencies import get_current_user, get_current_admin_user
@@ -61,14 +63,14 @@ def get_orders_analytics(db: Session = Depends(get_db), _=Depends(get_current_ad
     return service.get_orders_analytics(db)
 
 
-@router.post("/", response_model=OrderResponse, status_code=201)
+@router.post("/", response_model=OrderDetailResponse, status_code=201)
 def create_order(order_in: OrderCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not current_user.is_admin and order_in.user_id != current_user.id:
         raise ForbiddenException()
-    return service.create_order(db, order_in)
+    return service.create_order(db, order_in, actor_user_id=current_user.id)
 
 
-@router.get("/{order_id}", response_model=OrderResponse)
+@router.get("/{order_id}", response_model=OrderDetailResponse)
 def get_order(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     order = service.get_order_by_id(db, order_id)
     if not current_user.is_admin and order.user_id != current_user.id:
@@ -76,6 +78,19 @@ def get_order(order_id: int, db: Session = Depends(get_db), current_user: User =
     return order
 
 
-@router.patch("/{order_id}/status", response_model=OrderResponse)
-def update_order_status(order_id: int, status_in: OrderStatusUpdate, db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
-    return service.update_order_status(db, order_id, status_in)
+@router.get("/{order_id}/tracking", response_model=OrderTrackingResponse)
+def get_order_tracking(order_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    order = service.get_order_by_id(db, order_id)
+    if not current_user.is_admin and order.user_id != current_user.id:
+        raise ForbiddenException()
+    return order
+
+
+@router.patch("/{order_id}/status", response_model=OrderDetailResponse)
+def update_order_status(
+    order_id: int,
+    status_in: OrderStatusUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user),
+):
+    return service.update_order_status(db, order_id, status_in, actor_user_id=current_admin.id)

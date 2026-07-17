@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session, selectinload
 from app.features.offers import service as offers_service
-from app.features.orders.models import Order, OrderItem, OrderStatus
+from app.features.orders.models import Order, OrderItem, OrderStatus, OrderStatusHistory
 from app.features.orders.schemas import (
     OrderAnalyticsMetric,
     OrderAnalyticsResponse,
@@ -40,6 +40,34 @@ def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal
             return Decimal("0.00")
         return Decimal("100.00")
     return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def apply_order_status(
+    order: Order,
+    status: OrderStatus,
+    *,
+    note: Optional[str] = None,
+    changed_by_user_id: Optional[int] = None,
+    force: bool = False,
+) -> bool:
+    """Set an order's status and append a tracking entry when it changes.
+
+    No-op transitions are ignored (so a status that is re-applied does not
+    create duplicate timeline rows) unless ``force`` is set, which is used to
+    record the initial entry when an order is created. Returns whether an entry
+    was recorded. The caller is responsible for committing the session.
+    """
+    if not force and order.status == status:
+        return False
+    order.status = status
+    order.tracking.append(
+        OrderStatusHistory(
+            status=status,
+            note=note,
+            changed_by_user_id=changed_by_user_id,
+        )
+    )
+    return True
 
 
 def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:
@@ -142,13 +170,18 @@ def get_orders(
 
 
 def get_order_by_id(db: Session, order_id: int) -> Order:
-    order = db.query(Order).options(selectinload(Order.shipments)).filter(Order.id == order_id).first()
+    order = (
+        db.query(Order)
+        .options(selectinload(Order.shipments), selectinload(Order.tracking))
+        .filter(Order.id == order_id)
+        .first()
+    )
     if not order:
         raise NotFoundException("Order not found")
     return order
 
 
-def create_order(db: Session, order_in: OrderCreate) -> Order:
+def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int] = None) -> Order:
     user = db.query(User).filter(User.id == order_in.user_id).first()
     if not user:
         raise NotFoundException(f"User {order_in.user_id} not found")
@@ -191,14 +224,25 @@ def create_order(db: Session, order_in: OrderCreate) -> Order:
         product.stock_quantity -= quantity
 
     order.total_amount = total
+    apply_order_status(
+        order,
+        OrderStatus.PENDING,
+        note="Order placed",
+        changed_by_user_id=actor_user_id,
+        force=True,
+    )
     db.commit()
     db.refresh(order)
-    return order
+    return get_order_by_id(db, order.id)
 
 
-def update_order_status(db: Session, order_id: int, status_in: OrderStatusUpdate) -> Order:
+def update_order_status(
+    db: Session,
+    order_id: int,
+    status_in: OrderStatusUpdate,
+    actor_user_id: Optional[int] = None,
+) -> Order:
     order = get_order_by_id(db, order_id)
-    order.status = status_in.status
+    apply_order_status(order, status_in.status, changed_by_user_id=actor_user_id)
     db.commit()
-    db.refresh(order)
-    return order
+    return get_order_by_id(db, order_id)

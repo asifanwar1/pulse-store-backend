@@ -3,13 +3,14 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from sqlalchemy import String, cast, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.exceptions import ConflictException, NotFoundException
+from app.features.orders import service as orders_service
 from app.features.orders.models import Order, OrderItem, OrderStatus
 from app.features.orders.schemas import OrderItemResponse
 from app.features.products.models import Product
-from app.features.shipments.models import Shipment, ShipmentStatus
+from app.features.shipments.models import Shipment, ShipmentStatus, ShipmentTrackingEvent
 from app.features.shipments.schemas import (
     ShipmentAddressResponse,
     ShipmentAnalyticsMetric,
@@ -18,6 +19,7 @@ from app.features.shipments.schemas import (
     ShipmentCreate,
     ShipmentSortDirection,
     ShipmentStatusUpdate,
+    ShipmentTrackingEventCreate,
     ShipmentUpdate,
 )
 
@@ -87,18 +89,31 @@ def _ensure_order_has_no_shipment(db: Session, order_id: int, shipment_id: Optio
         raise ConflictException("Order already has a shipment")
 
 
-def _sync_order_status(order: Order, shipment_status: ShipmentStatus) -> None:
+def _sync_order_status(order: Order, shipment_status: ShipmentStatus, actor_user_id: Optional[int] = None) -> None:
     if shipment_status == ShipmentStatus.DELIVERED:
-        order.status = OrderStatus.DELIVERED
+        target = OrderStatus.DELIVERED
     elif shipment_status in (ShipmentStatus.SHIPPED, ShipmentStatus.IN_TRANSIT, ShipmentStatus.OUT_FOR_DELIVERY):
-        order.status = OrderStatus.SHIPPING
+        target = OrderStatus.SHIPPING
     elif shipment_status in (ShipmentStatus.CANCELLED, ShipmentStatus.RETURNED):
-        order.status = OrderStatus.CANCELLED
+        target = OrderStatus.CANCELLED
+    else:
+        return
+    orders_service.apply_order_status(
+        order,
+        target,
+        note=f"Shipment marked as {shipment_status.value}",
+        changed_by_user_id=actor_user_id,
+    )
 
 
-def _mark_order_shipping_on_shipment_creation(order: Order) -> None:
+def _mark_order_shipping_on_shipment_creation(order: Order, actor_user_id: Optional[int] = None) -> None:
     if order.status in (OrderStatus.PENDING, OrderStatus.PROCESSING):
-        order.status = OrderStatus.SHIPPING
+        orders_service.apply_order_status(
+            order,
+            OrderStatus.SHIPPING,
+            note="Shipment created",
+            changed_by_user_id=actor_user_id,
+        )
 
 
 def _apply_status_timestamps(shipment: Shipment, status: ShipmentStatus) -> None:
@@ -107,6 +122,49 @@ def _apply_status_timestamps(shipment: Shipment, status: ShipmentStatus) -> None
         shipment.shipped_at = now
     if status == ShipmentStatus.DELIVERED and shipment.delivered_at is None:
         shipment.delivered_at = now
+
+
+_STATUS_EVENT_DESCRIPTIONS = {
+    ShipmentStatus.PENDING: "Shipment created and awaiting processing",
+    ShipmentStatus.PROCESSING: "Shipment is being prepared",
+    ShipmentStatus.SHIPPED: "Package has been shipped",
+    ShipmentStatus.IN_TRANSIT: "Package is in transit",
+    ShipmentStatus.OUT_FOR_DELIVERY: "Package is out for delivery",
+    ShipmentStatus.DELIVERED: "Package has been delivered",
+    ShipmentStatus.CANCELLED: "Shipment was cancelled",
+    ShipmentStatus.RETURNED: "Package was returned",
+}
+
+
+def _status_event_description(status: ShipmentStatus) -> str:
+    return _STATUS_EVENT_DESCRIPTIONS.get(status, f"Status updated to {status.value}")
+
+
+def _record_shipment_status(
+    shipment: Shipment,
+    status: ShipmentStatus,
+    *,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+    changed_by_user_id: Optional[int] = None,
+    force: bool = False,
+) -> bool:
+    """Set a shipment's status, keep its timestamps in sync, and append a
+    tracking event when the status actually changes (or when ``force`` records
+    the initial event on creation). Returns whether an event was recorded."""
+    changed = force or shipment.status != status
+    shipment.status = status
+    _apply_status_timestamps(shipment, status)
+    if changed:
+        shipment.tracking.append(
+            ShipmentTrackingEvent(
+                status=status,
+                description=description or _status_event_description(status),
+                location=location,
+                changed_by_user_id=changed_by_user_id,
+            )
+        )
+    return changed
 
 
 def _normalize_shipment_address(address: dict | None) -> ShipmentAddressResponse | None:
@@ -243,7 +301,7 @@ def get_shipments(
 def get_shipment_by_id(db: Session, shipment_id: int) -> Shipment:
     shipment = (
         db.query(Shipment)
-        .options(*_shipment_details_options())
+        .options(*_shipment_details_options(), selectinload(Shipment.tracking))
         .filter(Shipment.id == shipment_id)
         .first()
     )
@@ -252,7 +310,7 @@ def get_shipment_by_id(db: Session, shipment_id: int) -> Shipment:
     return _attach_response_details([shipment])[0]
 
 
-def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:
+def create_shipment(db: Session, shipment_in: ShipmentCreate, actor_user_id: Optional[int] = None) -> Shipment:
     order = _get_order(db, shipment_in.order_id)
     _ensure_order_has_no_shipment(db, shipment_in.order_id)
     _ensure_tracking_id_available(db, shipment_in.tracking_id)
@@ -262,15 +320,14 @@ def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:
         tracking_id=shipment_in.tracking_id,
         shipment_method=shipment_in.shipment_method,
         courier=shipment_in.courier,
-        status=shipment_in.status,
         estimated_delivery_date=shipment_in.estimated_delivery_date,
         shipped_at=shipment_in.shipped_at,
         delivered_at=shipment_in.delivered_at,
         notes=shipment_in.notes,
     )
-    _apply_status_timestamps(shipment, shipment.status)
-    _mark_order_shipping_on_shipment_creation(order)
-    _sync_order_status(order, shipment.status)
+    _record_shipment_status(shipment, shipment_in.status, changed_by_user_id=actor_user_id, force=True)
+    _mark_order_shipping_on_shipment_creation(order, actor_user_id)
+    _sync_order_status(order, shipment.status, actor_user_id)
 
     db.add(shipment)
     db.commit()
@@ -278,7 +335,12 @@ def create_shipment(db: Session, shipment_in: ShipmentCreate) -> Shipment:
     return get_shipment_by_id(db, shipment.id)
 
 
-def update_shipment(db: Session, shipment_id: int, shipment_in: ShipmentUpdate) -> Shipment:
+def update_shipment(
+    db: Session,
+    shipment_id: int,
+    shipment_in: ShipmentUpdate,
+    actor_user_id: Optional[int] = None,
+) -> Shipment:
     shipment = get_shipment_by_id(db, shipment_id)
     update_data = shipment_in.model_dump(exclude_unset=True)
 
@@ -302,20 +364,72 @@ def update_shipment(db: Session, shipment_id: int, shipment_in: ShipmentUpdate) 
     if "notes" in update_data:
         shipment.notes = update_data["notes"]
     if "status" in update_data and update_data["status"] is not None:
-        shipment.status = update_data["status"]
-        _apply_status_timestamps(shipment, shipment.status)
-        _sync_order_status(shipment.order, shipment.status)
+        _record_shipment_status(shipment, update_data["status"], changed_by_user_id=actor_user_id)
+        _sync_order_status(shipment.order, shipment.status, actor_user_id)
 
     db.commit()
     db.refresh(shipment)
     return get_shipment_by_id(db, shipment.id)
 
 
-def update_shipment_status(db: Session, shipment_id: int, status_in: ShipmentStatusUpdate) -> Shipment:
+def update_shipment_status(
+    db: Session,
+    shipment_id: int,
+    status_in: ShipmentStatusUpdate,
+    actor_user_id: Optional[int] = None,
+) -> Shipment:
     shipment = get_shipment_by_id(db, shipment_id)
-    shipment.status = status_in.status
-    _apply_status_timestamps(shipment, shipment.status)
-    _sync_order_status(shipment.order, shipment.status)
+    _record_shipment_status(shipment, status_in.status, changed_by_user_id=actor_user_id)
+    _sync_order_status(shipment.order, shipment.status, actor_user_id)
     db.commit()
     db.refresh(shipment)
     return get_shipment_by_id(db, shipment.id)
+
+
+def add_shipment_tracking_event(
+    db: Session,
+    shipment_id: int,
+    event_in: ShipmentTrackingEventCreate,
+    actor_user_id: Optional[int] = None,
+) -> Shipment:
+    """Add a manual checkpoint to a shipment's timeline.
+
+    If the event carries a new ``status`` it also transitions the shipment (and
+    syncs the parent order); otherwise it is an informational checkpoint logged
+    at the shipment's current status.
+    """
+    shipment = get_shipment_by_id(db, shipment_id)
+    target_status = event_in.status
+    if target_status is not None and target_status != shipment.status:
+        _record_shipment_status(
+            shipment,
+            target_status,
+            description=event_in.description,
+            location=event_in.location,
+            changed_by_user_id=actor_user_id,
+        )
+        _sync_order_status(shipment.order, shipment.status, actor_user_id)
+    else:
+        shipment.tracking.append(
+            ShipmentTrackingEvent(
+                status=shipment.status,
+                description=event_in.description,
+                location=event_in.location,
+                changed_by_user_id=actor_user_id,
+            )
+        )
+    db.commit()
+    db.refresh(shipment)
+    return get_shipment_by_id(db, shipment.id)
+
+
+def get_shipment_by_tracking_id(db: Session, tracking_id: str) -> Shipment:
+    shipment = (
+        db.query(Shipment)
+        .options(joinedload(Shipment.order), selectinload(Shipment.tracking))
+        .filter(Shipment.tracking_id == tracking_id)
+        .first()
+    )
+    if not shipment:
+        raise NotFoundException("Shipment not found")
+    return shipment

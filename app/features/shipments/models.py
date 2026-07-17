@@ -42,3 +42,31 @@ class Shipment(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     order = relationship("Order", back_populates="shipments")
+    tracking = relationship(
+        "ShipmentTrackingEvent",
+        back_populates="shipment",
+        order_by="ShipmentTrackingEvent.id",
+        cascade="all, delete-orphan",
+    )
+
+
+class ShipmentTrackingEvent(Base):
+    """Append-only timeline of a shipment's journey.
+
+    Rows are created automatically on every status change and can also be
+    added manually by an admin as free-form checkpoints (e.g. "Arrived at
+    Lahore hub") with an optional location.
+    """
+
+    __tablename__ = "shipment_tracking_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    shipment_id = Column(Integer, ForeignKey("shipments.id"), nullable=False, index=True)
+    status = Column(Enum(ShipmentStatus), nullable=True)
+    description = Column(Text, nullable=True)
+    location = Column(String, nullable=True)
+    changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    shipment = relationship("Shipment", back_populates="tracking")
+    changed_by = relationship("User")

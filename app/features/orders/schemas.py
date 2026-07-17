@@ -104,3 +104,24 @@ class OrderResponse(BaseModel):
 class OrderListResponse(BaseModel):
     data: list[OrderResponse]
     count: int
+
+
+class OrderTrackingEntryResponse(BaseModel):
+    id: int
+    status: OrderStatus
+    note: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrderDetailResponse(OrderResponse):
+    tracking: list[OrderTrackingEntryResponse] = Field(default_factory=list)
+
+
+class OrderTrackingResponse(BaseModel):
+    order_id: int = Field(validation_alias="id")
+    status: OrderStatus
+    tracking: list[OrderTrackingEntryResponse] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
