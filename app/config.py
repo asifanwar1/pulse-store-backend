@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: str = ""
     DEFAULT_CURRENCY: str = "usd"
 
+    # AI Agents
+    AI_AGENTS_ENABLED: bool = True
+    AI_DEFAULT_MODEL: str = "openai:gpt-4o-mini"
+    OPENAI_API_KEY: str = ""
+    ANTHROPIC_API_KEY: str = ""
+    AI_CHAT_MAX_HISTORY_TURNS: int = 20
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

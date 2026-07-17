@@ -205,6 +205,10 @@ def get_products(
     return {"data": products, "count": total_count}
 
 
+def sku_exists(db: Session, sku: str) -> bool:
+    return db.query(Product.id).filter(Product.sku == sku).first() is not None
+
+
 def get_product_by_id(db: Session, product_id: int) -> Product:
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
