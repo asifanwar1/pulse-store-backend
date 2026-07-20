@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from pydantic import BaseModel, ValidationError
@@ -47,10 +47,14 @@ class ProductDraftResult(BaseModel):
 
 
 @agent.tool
-def list_categories(ctx: RunContext[AgentDeps]) -> list[CategoryOut]:
-    """List existing product categories, so a category name can be resolved to its id."""
+def list_categories(ctx: RunContext[AgentDeps], search: Optional[str] = None) -> list[CategoryOut]:
+    """List existing product categories, optionally filtered by name, to resolve a category to its id.
+
+    Some providers mishandle a tool with no parameters at all (sending null instead of {}
+    as the call arguments), so this always keeps at least one real, useful parameter.
+    """
     with tool_db_session() as db:
-        result = categories_service.get_categories(db, limit=200)
+        result = categories_service.get_categories(db, search=search, limit=200)
         return [CategoryOut(id=c.id, name=c.name, slug=c.slug) for c in result["data"]]
 
 
@@ -67,8 +71,8 @@ def create_product_draft(
     name: str,
     sku: str,
     brand: str,
-    retail_price: Decimal,
-    cost_price: Decimal,
+    retail_price: str,
+    cost_price: str,
     stock_quantity: int,
     category_id: int,
     status: ProductStatusFilter,
@@ -76,22 +80,33 @@ def create_product_draft(
     description: Optional[str] = None,
     media: Optional[list[MediaItem]] = None,
 ) -> ProductDraftResult:
-    """Create the product. Only call this after the admin has confirmed the drafted details."""
+    """Create the product. Only call this after the admin has confirmed the drafted details.
+
+    retail_price/cost_price are plain decimal strings (e.g. "29.99") rather than a numeric
+    type: some tool-calling providers (Groq) reject the JSON schema pydantic generates for
+    Decimal parameters, so the conversion happens here instead of in the tool signature.
+    """
+    if ctx.deps.is_first_message:
+        raise ModelRetry(
+            "Do not create the product yet. Summarize the drafted details for the admin "
+            "and ask them to confirm first; only call this tool after their next message."
+        )
+
     try:
         product_in = ProductCreate(
             name=name,
             sku=sku,
             brand=brand,
             description=description,
-            retail_price=retail_price,
-            cost_price=cost_price,
+            retail_price=Decimal(retail_price),
+            cost_price=Decimal(cost_price),
             stock_quantity=stock_quantity,
             category_id=category_id,
             status=status,
             tags=tags or [],
             media=media or [],
         )
-    except ValidationError as exc:
+    except (ValidationError, InvalidOperation) as exc:
         raise ModelRetry(str(exc)) from exc
 
     try:

@@ -20,6 +20,11 @@ class AgentDeps:
     current_user: User
     system_prompt: str
     conversation_id: Optional[int] = None
+    is_first_message: bool = False
+    """True when the conversation has no prior turns yet. Smaller/faster models don't
+    reliably honor a "wait for explicit confirmation before acting" instruction from the
+    system prompt alone, so any tool with a real side effect (e.g. writing to the database)
+    should check this and refuse on the first message, forcing at least one round-trip."""
 
 
 @contextmanager

@@ -7,12 +7,13 @@ from sqlalchemy.orm import Session
 from app.core.ai_agents import runner
 from app.dependencies import get_db
 from app.features.ai_agents import agents  # noqa: F401  (populates the agent registry)
-from app.features.ai_agents import service
+from app.features.ai_agents import model_catalog, service
 from app.features.ai_agents.schemas import (
     AgentConfigListResponse,
     AgentConfigResponse,
     AgentConfigUpdate,
     AgentStatusUpdate,
+    AvailableModelsResponse,
     ChatRequest,
     SupportTicketListResponse,
     SupportTicketResponse,
@@ -27,6 +28,11 @@ router = APIRouter()
 @router.get("/", response_model=AgentConfigListResponse)
 def list_agent_configs(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
     return service.list_agent_configs(db)
+
+
+@router.get("/available-models", response_model=AvailableModelsResponse)
+def list_available_models(_=Depends(get_current_admin_user)):
+    return {"data": model_catalog.list_available_models()}
 
 
 @router.patch("/{agent_key}", response_model=AgentConfigResponse)

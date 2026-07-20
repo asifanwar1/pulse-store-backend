@@ -51,6 +51,7 @@ def prepare_chat_context(
         current_user=current_user,
         system_prompt=config.system_prompt_override or definition.default_system_prompt,
         conversation_id=conversation.id,
+        is_first_message=not prior_turns,
     )
     return ChatContext(
         definition=definition,

@@ -1,4 +1,8 @@
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+load_dotenv()
 
 
 class Settings(BaseSettings):
@@ -30,7 +34,8 @@ class Settings(BaseSettings):
 
     # AI Agents
     AI_AGENTS_ENABLED: bool = True
-    AI_DEFAULT_MODEL: str = "openai:gpt-4o-mini"
+    AI_DEFAULT_MODEL: str = "groq:llama-3.3-70b-versatile"
+    GROQ_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     AI_CHAT_MAX_HISTORY_TURNS: int = 20

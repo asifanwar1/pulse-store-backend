@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -20,6 +22,18 @@ class AgentConfig(Base):
     updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    @property
+    def default_system_prompt(self) -> Optional[str]:
+        """The agent's built-in prompt (from its agents/*.py file), for the admin UI to show
+        as a starting point -- not a DB column, since it's defined in code, not configured."""
+        from app.core.ai_agents import registry
+        from app.core.exceptions import NotFoundException
+
+        try:
+            return registry.get_agent_definition(self.agent_key).default_system_prompt
+        except NotFoundException:
+            return None
 
 
 class Conversation(Base):

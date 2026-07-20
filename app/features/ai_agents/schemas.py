@@ -11,6 +11,7 @@ class AgentConfigResponse(BaseModel):
     is_enabled: bool
     model_name: Optional[str] = None
     system_prompt_override: Optional[str] = None
+    default_system_prompt: Optional[str] = None
     updated_by: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -21,6 +22,19 @@ class AgentConfigResponse(BaseModel):
 class AgentConfigListResponse(BaseModel):
     data: list[AgentConfigResponse]
     count: int
+
+
+class AvailableModel(BaseModel):
+    model: str
+    provider: str
+    label: str
+    note: str
+    available: bool
+    """False when the backend doesn't have the API key this model's provider needs."""
+
+
+class AvailableModelsResponse(BaseModel):
+    data: list[AvailableModel]
 
 
 class AgentConfigUpdate(BaseModel):
