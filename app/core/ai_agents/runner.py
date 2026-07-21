@@ -9,6 +9,7 @@ from app.core.ai_agents import registry
 from app.core.ai_agents.deps import AgentDeps
 from app.core.ai_agents.messages import deserialize_turns
 from app.core.exceptions import ForbiddenException
+from app.features.media.schemas import MediaItem
 from app.features.users.models import User
 
 
@@ -67,13 +68,33 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
-async def stream_agent_chat(ctx: ChatContext, message: str) -> AsyncGenerator[str, None]:
+def _append_media_block(message: str, media: Optional[list[MediaItem]]) -> str:
+    """Renders attached media as plain text the agent can read and hand to a tool.
+
+    Agents are text-only (no vision model wired up) -- they never see the actual image
+    bytes/pixels, only this id/url/file_name listing, which is exactly the shape
+    `MediaItem` tool parameters (e.g. product_listing's create_product_draft) expect.
+    """
+    if not media:
+        return message
+
+    lines = ["[Attached images]"]
+    for item in media:
+        name = item.file_name or item.url.rsplit("/", 1)[-1]
+        lines.append(f"- id: {item.id}, url: {item.url}, file_name: {name}")
+
+    return f"{message}\n\n{chr(10).join(lines)}" if message.strip() else "\n".join(lines)
+
+
+async def stream_agent_chat(
+    ctx: ChatContext, message: str, media: Optional[list[MediaItem]] = None
+) -> AsyncGenerator[str, None]:
     from app.features.ai_agents import service as ai_service
 
     reply_chunks: list[str] = []
     try:
         async with ctx.definition.agent.run_stream(
-            message,
+            _append_media_block(message, media),
             deps=ctx.deps,
             message_history=ctx.history,
             model=ctx.model_name,

@@ -64,7 +64,9 @@ async def chat_with_agent(
     current_user: User = Depends(get_current_user),
 ):
     ctx = runner.prepare_chat_context(db, agent_key, current_user, chat_in.conversation_id)
-    return StreamingResponse(runner.stream_agent_chat(ctx, chat_in.message), media_type="text/event-stream")
+    return StreamingResponse(
+        runner.stream_agent_chat(ctx, chat_in.message, chat_in.media), media_type="text/event-stream"
+    )
 
 
 @router.get("/tickets/analytics", response_model=SupportTicketAnalyticsResponse)

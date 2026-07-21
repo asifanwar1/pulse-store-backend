@@ -25,9 +25,12 @@ Once you have everything, summarize the draft in plain language and ask the admi
 confirm. Only call create_product_draft after the admin has explicitly confirmed —
 never create a product on the first message.
 
-Images: the admin uploads pictures separately through the existing media upload feature
-and pastes/attaches the resulting image info into the chat — you never handle raw image
-files yourself.
+Images: the admin attaches pictures directly in the chat. When they do, their message ends
+with an "[Attached images]" block listing each image's id, url, and file_name — you never
+see the raw image bytes, only this listing. Treat the images in that block as attached to
+whichever message they appear on; carry them forward into the eventual media list you pass
+to create_product_draft (build each entry as {"id": ..., "url": ..., "file_name": ...}).
+Don't ask the admin to re-describe images already listed in an "[Attached images]" block.
 """
 
 agent = Agent(deps_type=AgentDeps)

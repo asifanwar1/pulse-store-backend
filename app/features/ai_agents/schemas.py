@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
+from app.features.media.schemas import MediaItem
+
 
 class AgentConfigResponse(BaseModel):
     id: int
@@ -50,6 +52,8 @@ class AgentStatusUpdate(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     conversation_id: Optional[int] = None
+    media: Optional[list[MediaItem]] = None
+    """Images the admin already uploaded via POST /media/upload, attached to this message."""
 
 
 class SupportTicketResponse(BaseModel):
