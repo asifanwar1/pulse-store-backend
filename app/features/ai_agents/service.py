@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -7,7 +8,13 @@ from app.core.ai_agents import registry
 from app.core.ai_agents.messages import serialize_new_messages
 from app.core.exceptions import NotFoundException
 from app.features.ai_agents.models import AgentConfig, AgentMessage, Conversation, SupportTicket
-from app.features.ai_agents.schemas import AgentConfigUpdate, AgentStatusUpdate, SupportTicketStatusUpdate
+from app.features.ai_agents.schemas import (
+    AgentConfigUpdate,
+    AgentStatusUpdate,
+    SupportTicketAnalyticsMetric,
+    SupportTicketAnalyticsResponse,
+    SupportTicketStatusUpdate,
+)
 
 
 def get_or_create_agent_config(db: Session, agent_key: str) -> AgentConfig:
@@ -117,6 +124,56 @@ def list_support_tickets(db: Session, is_resolved: Optional[bool], page: int, li
     offset = (page - 1) * limit
     tickets = query.order_by(SupportTicket.created_at.desc()).offset(offset).limit(limit).all()
     return {"data": tickets, "count": total_count}
+
+
+def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
+    if previous == 0:
+        if current == 0:
+            return Decimal("0.00")
+        return Decimal("100.00")
+    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _resolution_rate(resolved: int, total: int) -> int:
+    if total == 0:
+        return 0
+    return int((Decimal(resolved) / Decimal(total) * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def get_tickets_analytics(db: Session) -> SupportTicketAnalyticsResponse:
+    period_start = datetime.now(timezone.utc) - timedelta(days=30)
+
+    all_tickets = db.query(SupportTicket.is_resolved, SupportTicket.created_at).all()
+    previous_tickets = [ticket for ticket in all_tickets if ticket.created_at and ticket.created_at < period_start]
+
+    current_total = len(all_tickets)
+    current_resolved = sum(1 for ticket in all_tickets if ticket.is_resolved)
+    current_unresolved = current_total - current_resolved
+    current_rate = _resolution_rate(current_resolved, current_total)
+
+    previous_total = len(previous_tickets)
+    previous_resolved = sum(1 for ticket in previous_tickets if ticket.is_resolved)
+    previous_unresolved = previous_total - previous_resolved
+    previous_rate = _resolution_rate(previous_resolved, previous_total)
+
+    return SupportTicketAnalyticsResponse(
+        totalTickets=SupportTicketAnalyticsMetric(
+            value=current_total,
+            change_percentage=_calculate_percentage_change(Decimal(current_total), Decimal(previous_total)),
+        ),
+        resolvedTickets=SupportTicketAnalyticsMetric(
+            value=current_resolved,
+            change_percentage=_calculate_percentage_change(Decimal(current_resolved), Decimal(previous_resolved)),
+        ),
+        unresolvedTickets=SupportTicketAnalyticsMetric(
+            value=current_unresolved,
+            change_percentage=_calculate_percentage_change(Decimal(current_unresolved), Decimal(previous_unresolved)),
+        ),
+        resolutionRate=SupportTicketAnalyticsMetric(
+            value=current_rate,
+            change_percentage=_calculate_percentage_change(Decimal(current_rate), Decimal(previous_rate)),
+        ),
+    )
 
 
 def set_ticket_status(db: Session, ticket_id: int, status_in: SupportTicketStatusUpdate, actor_user_id: int) -> SupportTicket:

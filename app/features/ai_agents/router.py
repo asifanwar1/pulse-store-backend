@@ -15,6 +15,7 @@ from app.features.ai_agents.schemas import (
     AgentStatusUpdate,
     AvailableModelsResponse,
     ChatRequest,
+    SupportTicketAnalyticsResponse,
     SupportTicketListResponse,
     SupportTicketResponse,
     SupportTicketStatusUpdate,
@@ -64,6 +65,11 @@ async def chat_with_agent(
 ):
     ctx = runner.prepare_chat_context(db, agent_key, current_user, chat_in.conversation_id)
     return StreamingResponse(runner.stream_agent_chat(ctx, chat_in.message), media_type="text/event-stream")
+
+
+@router.get("/tickets/analytics", response_model=SupportTicketAnalyticsResponse)
+def get_tickets_analytics(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
+    return service.get_tickets_analytics(db)
 
 
 @router.get("/tickets", response_model=SupportTicketListResponse)

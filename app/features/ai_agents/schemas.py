@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class AgentConfigResponse(BaseModel):
@@ -72,3 +73,20 @@ class SupportTicketListResponse(BaseModel):
 
 class SupportTicketStatusUpdate(BaseModel):
     is_resolved: bool = Field(...)
+
+
+class SupportTicketAnalyticsMetric(BaseModel):
+    value: int
+    change_percentage: Decimal
+
+    @field_serializer("change_percentage")
+    def serialize_change_percentage(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+
+class SupportTicketAnalyticsResponse(BaseModel):
+    totalTickets: SupportTicketAnalyticsMetric
+    resolvedTickets: SupportTicketAnalyticsMetric
+    unresolvedTickets: SupportTicketAnalyticsMetric
+    resolutionRate: SupportTicketAnalyticsMetric
+    """Resolved tickets as a percentage (0-100) of total tickets."""
