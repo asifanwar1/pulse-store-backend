@@ -287,6 +287,7 @@ def get_active_offers(db: Session) -> dict:
     now = datetime.now(timezone.utc)
     offers = (
         db.query(Offer)
+        .options(selectinload(Offer.categories))
         .filter(Offer.is_active.is_(True), Offer.start_date <= now, Offer.end_date >= now)
         .order_by(Offer.discount_percentage.desc())
         .all()

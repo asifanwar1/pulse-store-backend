@@ -36,9 +36,12 @@ class Order(Base):
     status = Column(Enum(OrderStatus), default=OrderStatus.PENDING)
     payment_method = Column(Enum(PaymentMethod),
                             default=PaymentMethod.cod, nullable=False)
-    payment_status = Column(Enum(OrderPaymentStatus), default=OrderPaymentStatus.UNPAID, nullable=False)
+    payment_status = Column(Enum(OrderPaymentStatus),
+                            default=OrderPaymentStatus.UNPAID, nullable=False)
     notes = Column(Text, nullable=True)
     total_amount = Column(Numeric(10, 2), nullable=False)
+    shipping_fee = Column(Numeric(10, 2), nullable=False,
+                          default=Decimal("5.99"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -72,6 +75,11 @@ class Order(Base):
         shipment = self.latest_shipment
         return shipment.shipped_at if shipment else None
 
+    @property
+    def tracking_id(self):
+        shipment = self.latest_shipment
+        return shipment.tracking_id if shipment else None
+
 
 class OrderStatusHistory(Base):
     """Append-only timeline of an order's status transitions (order tracking)."""
@@ -79,7 +87,8 @@ class OrderStatusHistory(Base):
     __tablename__ = "order_status_history"
 
     id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"),
+                      nullable=False, index=True)
     status = Column(Enum(OrderStatus), nullable=False)
     note = Column(Text, nullable=True)
     changed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)

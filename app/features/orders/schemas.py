@@ -86,18 +86,24 @@ class OrderResponse(BaseModel):
     payment_status: OrderPaymentStatus
     notes: Optional[str] = None
     total_amount: Decimal
+    shipping_fee: Decimal
     total_ordered_items: int = Field(serialization_alias="totalOrderedItems")
     user: OrderUserResponse
     created_at: datetime
     updated_at: Optional[datetime] = None
     estimated_delivery_date: Optional[datetime] = None
     shipped_at: Optional[datetime] = None
+    tracking_id: Optional[str] = None
     items: list[OrderItemResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     @field_serializer("total_amount")
     def serialize_total_amount(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+    @field_serializer("shipping_fee")
+    def serialize_shipping_fee(self, value: Decimal) -> str:
         return f"{value:.2f}"
 
 

@@ -18,6 +18,11 @@ from app.core.exceptions import NotFoundException, ConflictException
 from app.core.money import to_decimal
 
 
+# Flat rate, no per-region logic yet; matches the frontend's display constant
+# and the Order.shipping_fee column default.
+SHIPPING_FEE = Decimal("5.99")
+
+
 SORTABLE_ORDER_COLUMNS = {
     "id": Order.id,
     "user_id": Order.user_id,
@@ -205,6 +210,7 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
     order = Order(
         user_id=order_in.user_id,
         total_amount=total,
+        shipping_fee=SHIPPING_FEE,
         payment_method=order_in.payment_method,
         notes=order_in.notes,
     )
@@ -223,7 +229,7 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
         ))
         product.stock_quantity -= quantity
 
-    order.total_amount = total
+    order.total_amount = total + order.shipping_fee
     apply_order_status(
         order,
         OrderStatus.PENDING,

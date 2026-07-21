@@ -110,6 +110,7 @@ class ActiveOfferResponse(BaseModel):
     discount_percentage: Decimal
     scope: OfferScope
     end_date: datetime
+    categories: list[OfferCategorySummary] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
