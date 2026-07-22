@@ -25,6 +25,7 @@ from app.features.favourites.router import router as favourites_router
 from app.features.reviews.router import router as reviews_router
 from app.features.banners.router import router as banners_router
 from app.features.ai_agents.router import router as ai_agents_router
+from app.features.notifications.router import router as notifications_router
 
 app = FastAPI(title="Pulse Store API", version="1.0.0")
 
@@ -69,6 +70,7 @@ app.include_router(favourites_router,
 app.include_router(reviews_router, prefix="/api/v1/reviews", tags=["Reviews"])
 app.include_router(banners_router, prefix="/api/v1/banners", tags=["Banners"])
 app.include_router(ai_agents_router, prefix="/api/v1/ai-agents", tags=["AI Agents"])
+app.include_router(notifications_router, prefix="/api/v1/notifications", tags=["Notifications"])
 
 
 @app.get("/")

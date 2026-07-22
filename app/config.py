@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     AI_CHAT_MAX_HISTORY_TURNS: int = 20
 
+    # Firebase (push notifications)
+    FIREBASE_CREDENTIALS_JSON: str = ""
+    FIREBASE_PROJECT_ID: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

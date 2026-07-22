@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.exceptions import BadRequestException, ConflictException, NotFoundException
 from app.core.money import to_decimal
+from app.features.notifications import service as notifications_service
+from app.features.notifications.models import NotificationType
 from app.features.orders.models import Order, OrderPaymentStatus, OrderStatus
 from app.features.users.models import User
 from app.features.wallet.models import PaymentStatus, Wallet, WalletPaymentMethod, WalletTransaction
@@ -28,11 +30,15 @@ def get_or_create_wallet(db: Session, user: User) -> Wallet:
     if wallet:
         return wallet
 
-    customer = stripe.Customer.create(
-        email=user.email,
-        name=user.full_name,
-        metadata={"user_id": str(user.id)},
-    )
+    try:
+        customer = stripe.Customer.create(
+            email=user.email,
+            name=user.full_name,
+            metadata={"user_id": str(user.id)},
+        )
+    except stripe.error.StripeError as error:
+        raise BadRequestException(str(error))
+
     wallet = Wallet(user_id=user.id, stripe_customer_id=customer.id)
     db.add(wallet)
     db.commit()
@@ -42,8 +48,11 @@ def get_or_create_wallet(db: Session, user: User) -> Wallet:
 
 def create_setup_intent(db: Session, user: User) -> str:
     wallet = get_or_create_wallet(db, user)
-    intent = stripe.SetupIntent.create(
-        customer=wallet.stripe_customer_id, payment_method_types=["card"])
+    try:
+        intent = stripe.SetupIntent.create(
+            customer=wallet.stripe_customer_id, payment_method_types=["card"])
+    except stripe.error.StripeError as error:
+        raise BadRequestException(str(error))
     return intent.client_secret
 
 
@@ -226,12 +235,30 @@ def pay_for_order(db: Session, user: User, order_id: int, payment_method_id: Opt
         _record_transaction(db, wallet, order, PaymentStatus.FAILED,
                             stripe_payment_intent_id=failed_intent_id, failure_message=failure_message)
         db.commit()
+        notifications_service.create_notification(
+            db,
+            user.id,
+            NotificationType.WALLET_PAYMENT_FAILED,
+            title="Payment failed",
+            body=f"Payment for order #{order.id} failed: {failure_message}",
+            entity_type="order",
+            entity_id=order.id,
+        )
         return PayOrderResponse(status=PayOrderStatus.FAILED, order_id=order.id, message=failure_message)
     except stripe.error.StripeError as error:
 
         _record_transaction(db, wallet, order,
                             PaymentStatus.FAILED, failure_message=str(error))
         db.commit()
+        notifications_service.create_notification(
+            db,
+            user.id,
+            NotificationType.WALLET_PAYMENT_FAILED,
+            title="Payment failed",
+            body=f"Payment for order #{order.id} could not be processed.",
+            entity_type="order",
+            entity_id=order.id,
+        )
         raise BadRequestException(f"Payment could not be processed: {error}")
 
     if intent.status == "succeeded":
@@ -241,6 +268,15 @@ def pay_for_order(db: Session, user: User, order_id: int, payment_method_id: Opt
         if order.status == OrderStatus.PENDING:
             order.status = OrderStatus.PROCESSING
         db.commit()
+        notifications_service.create_notification(
+            db,
+            user.id,
+            NotificationType.WALLET_PAYMENT_SUCCEEDED,
+            title="Payment successful",
+            body=f"Your payment for order #{order.id} was successful.",
+            entity_type="order",
+            entity_id=order.id,
+        )
         return PayOrderResponse(status=PayOrderStatus.SUCCEEDED, order_id=order.id)
 
     if intent.status == "requires_action":

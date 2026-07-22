@@ -3,6 +3,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session, selectinload
+from app.features.notifications import service as notifications_service
+from app.features.notifications.models import NotificationType
 from app.features.offers import service as offers_service
 from app.features.orders.models import Order, OrderItem, OrderStatus, OrderStatusHistory
 from app.features.orders.schemas import (
@@ -18,8 +20,6 @@ from app.core.exceptions import NotFoundException, ConflictException
 from app.core.money import to_decimal
 
 
-# Flat rate, no per-region logic yet; matches the frontend's display constant
-# and the Order.shipping_fee column default.
 SHIPPING_FEE = Decimal("5.99")
 
 
@@ -192,7 +192,8 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
         raise NotFoundException(f"User {order_in.user_id} not found")
 
     product_ids = {item.product_id for item in order_in.items}
-    products_by_id = {product.id: product for product in db.query(Product).filter(Product.id.in_(product_ids)).all()}
+    products_by_id = {product.id: product for product in db.query(
+        Product).filter(Product.id.in_(product_ids)).all()}
 
     resolved_items = []
     for item in order_in.items:
@@ -204,7 +205,8 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
                 f"Insufficient stock for product: {product.name}")
         resolved_items.append((product, item.quantity))
 
-    offer_matches = offers_service.compute_offer_matches(db, [product for product, _ in resolved_items])
+    offer_matches = offers_service.compute_offer_matches(
+        db, [product for product, _ in resolved_items])
 
     total = Decimal("0")
     order = Order(
@@ -219,7 +221,8 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
 
     for product, quantity in resolved_items:
         match = offer_matches.get(product.id)
-        unit_price = match.discounted_price if match else to_decimal(product.price)
+        unit_price = match.discounted_price if match else to_decimal(
+            product.price)
         total += unit_price * quantity
         db.add(OrderItem(
             order_id=order.id,
@@ -239,6 +242,15 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
     )
     db.commit()
     db.refresh(order)
+
+    notifications_service.notify_admins(
+        db,
+        NotificationType.NEW_ORDER,
+        title="New order placed",
+        body=f"Order #{order.id} placed by {user.full_name} for {order.total_amount:.2f}",
+        entity_type="order",
+        entity_id=order.id,
+    )
     return get_order_by_id(db, order.id)
 
 
@@ -249,6 +261,18 @@ def update_order_status(
     actor_user_id: Optional[int] = None,
 ) -> Order:
     order = get_order_by_id(db, order_id)
-    apply_order_status(order, status_in.status, changed_by_user_id=actor_user_id)
+    status_changed = apply_order_status(
+        order, status_in.status, changed_by_user_id=actor_user_id)
     db.commit()
+
+    if status_changed:
+        notifications_service.create_notification(
+            db,
+            order.user_id,
+            NotificationType.ORDER_STATUS_CHANGED,
+            title="Order status updated",
+            body=f"Your order #{order.id} is now {order.status.value.lower()}",
+            entity_type="order",
+            entity_id=order.id,
+        )
     return get_order_by_id(db, order_id)

@@ -15,6 +15,8 @@ from app.features.ai_agents.schemas import (
     SupportTicketAnalyticsResponse,
     SupportTicketStatusUpdate,
 )
+from app.features.notifications import service as notifications_service
+from app.features.notifications.models import NotificationType
 
 
 def get_or_create_agent_config(db: Session, agent_key: str) -> AgentConfig:
@@ -112,6 +114,15 @@ def create_support_ticket(db: Session, conversation_id: int, user_id: int, subje
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
+
+    notifications_service.notify_admins(
+        db,
+        NotificationType.SUPPORT_TICKET_CREATED,
+        title="New support ticket",
+        body=subject,
+        entity_type="support_ticket",
+        entity_id=ticket.id,
+    )
     return ticket
 
 
@@ -186,4 +197,15 @@ def set_ticket_status(db: Session, ticket_id: int, status_in: SupportTicketStatu
     ticket.resolved_by = actor_user_id if status_in.is_resolved else None
     db.commit()
     db.refresh(ticket)
+
+    if status_in.is_resolved:
+        notifications_service.create_notification(
+            db,
+            ticket.user_id,
+            NotificationType.SUPPORT_TICKET_RESOLVED,
+            title="Support ticket resolved",
+            body=f"Your support ticket '{ticket.subject}' has been resolved.",
+            entity_type="support_ticket",
+            entity_id=ticket.id,
+        )
     return ticket
