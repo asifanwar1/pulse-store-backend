@@ -10,6 +10,7 @@ from app.features.orders.models import Order, OrderItem, OrderStatus, OrderStatu
 from app.features.orders.schemas import (
     OrderAnalyticsMetric,
     OrderAnalyticsResponse,
+    OrderConfigResponse,
     OrderCreate,
     OrderSortDirection,
     OrderStatusUpdate,
@@ -73,6 +74,10 @@ def apply_order_status(
         )
     )
     return True
+
+
+def get_order_config() -> OrderConfigResponse:
+    return OrderConfigResponse(shipping_fee=SHIPPING_FEE)
 
 
 def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:

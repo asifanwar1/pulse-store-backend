@@ -5,6 +5,7 @@ from app.dependencies import get_db
 from app.features.orders import service
 from app.features.orders.schemas import (
     OrderAnalyticsResponse,
+    OrderConfigResponse,
     OrderCreate,
     OrderDetailResponse,
     OrderListResponse,
@@ -61,6 +62,11 @@ def list_orders(
 @router.get("/analytics", response_model=OrderAnalyticsResponse)
 def get_orders_analytics(db: Session = Depends(get_db), _=Depends(get_current_admin_user)):
     return service.get_orders_analytics(db)
+
+
+@router.get("/config", response_model=OrderConfigResponse)
+def get_order_config():
+    return service.get_order_config()
 
 
 @router.post("/", response_model=OrderDetailResponse, status_code=201)

@@ -11,6 +11,14 @@ class OrderItemCreate(BaseModel):
     quantity: int
 
 
+class OrderConfigResponse(BaseModel):
+    shipping_fee: Decimal
+
+    @field_serializer("shipping_fee")
+    def serialize_shipping_fee(self, value: Decimal) -> str:
+        return f"{value:.2f}"
+
+
 class OrderItemResponse(BaseModel):
     id: int
     product_id: int
