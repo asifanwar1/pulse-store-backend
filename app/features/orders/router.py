@@ -6,6 +6,7 @@ from app.features.orders import service
 from app.features.orders.schemas import (
     OrderAnalyticsResponse,
     OrderConfigResponse,
+    OrderConfigUpdate,
     OrderCreate,
     OrderDetailResponse,
     OrderListResponse,
@@ -65,8 +66,17 @@ def get_orders_analytics(db: Session = Depends(get_db), _=Depends(get_current_ad
 
 
 @router.get("/config", response_model=OrderConfigResponse)
-def get_order_config():
-    return service.get_order_config()
+def get_order_config(db: Session = Depends(get_db)):
+    return service.get_order_config(db)
+
+
+@router.patch("/config", response_model=OrderConfigResponse)
+def update_order_config(
+    config_in: OrderConfigUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin_user),
+):
+    return service.update_order_config(db, config_in, actor_user_id=current_admin.id)
 
 
 @router.post("/", response_model=OrderDetailResponse, status_code=201)

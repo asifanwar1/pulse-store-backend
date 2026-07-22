@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session, selectinload
 from app.features.notifications import service as notifications_service
 from app.features.notifications.models import NotificationType
 from app.features.offers import service as offers_service
-from app.features.orders.models import Order, OrderItem, OrderStatus, OrderStatusHistory
+from app.features.orders.models import Order, OrderItem, OrderSettings, OrderStatus, OrderStatusHistory
 from app.features.orders.schemas import (
     OrderAnalyticsMetric,
     OrderAnalyticsResponse,
     OrderConfigResponse,
+    OrderConfigUpdate,
     OrderCreate,
     OrderSortDirection,
     OrderStatusUpdate,
@@ -21,7 +22,9 @@ from app.core.exceptions import NotFoundException, ConflictException
 from app.core.money import to_decimal
 
 
-SHIPPING_FEE = Decimal("5.99")
+DEFAULT_SHIPPING_FEE = Decimal("5.99")
+
+ORDER_SETTINGS_ID = 1
 
 
 SORTABLE_ORDER_COLUMNS = {
@@ -76,8 +79,34 @@ def apply_order_status(
     return True
 
 
-def get_order_config() -> OrderConfigResponse:
-    return OrderConfigResponse(shipping_fee=SHIPPING_FEE)
+def get_or_create_order_settings(db: Session) -> OrderSettings:
+    settings = db.query(OrderSettings).filter(
+        OrderSettings.id == ORDER_SETTINGS_ID).first()
+    if not settings:
+        settings = OrderSettings(
+            id=ORDER_SETTINGS_ID, shipping_fee=DEFAULT_SHIPPING_FEE)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+    return settings
+
+
+def get_order_config(db: Session) -> OrderConfigResponse:
+    settings = get_or_create_order_settings(db)
+    return OrderConfigResponse(shipping_fee=settings.shipping_fee)
+
+
+def update_order_config(
+    db: Session,
+    config_in: OrderConfigUpdate,
+    actor_user_id: Optional[int] = None,
+) -> OrderConfigResponse:
+    settings = get_or_create_order_settings(db)
+    settings.shipping_fee = config_in.shipping_fee
+    settings.updated_by = actor_user_id
+    db.commit()
+    db.refresh(settings)
+    return OrderConfigResponse(shipping_fee=settings.shipping_fee)
 
 
 def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:
@@ -213,11 +242,13 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
     offer_matches = offers_service.compute_offer_matches(
         db, [product for product, _ in resolved_items])
 
+    shipping_fee = get_or_create_order_settings(db).shipping_fee
+
     total = Decimal("0")
     order = Order(
         user_id=order_in.user_id,
         total_amount=total,
-        shipping_fee=SHIPPING_FEE,
+        shipping_fee=shipping_fee,
         payment_method=order_in.payment_method,
         notes=order_in.notes,
     )

@@ -81,6 +81,19 @@ class Order(Base):
         return shipment.tracking_id if shipment else None
 
 
+class OrderSettings(Base):
+    """Admin-configurable order settings -- single row (id=1)."""
+
+    __tablename__ = "order_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    shipping_fee = Column(Numeric(10, 2), nullable=False,
+                          default=Decimal("5.99"))
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+
 class OrderStatusHistory(Base):
     """Append-only timeline of an order's status transitions (order tracking)."""
 

@@ -19,6 +19,10 @@ class OrderConfigResponse(BaseModel):
         return f"{value:.2f}"
 
 
+class OrderConfigUpdate(BaseModel):
+    shipping_fee: Decimal = Field(ge=0)
+
+
 class OrderItemResponse(BaseModel):
     id: int
     product_id: int
