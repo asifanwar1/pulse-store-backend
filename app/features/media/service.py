@@ -16,6 +16,8 @@ ALLOWED_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP"}
 OUTPUT_CONTENT_TYPE = "image/webp"
 OUTPUT_QUALITY = 85  # visually lossless at this quality; ~60-80% smaller than source PNG
 MAX_DIMENSION = 2000  # longest side, px — guards against oversized canvas exports
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB — enforced while reading, before any decoding
+_READ_CHUNK_SIZE = 1024 * 1024
 
 _supabase_client: Client | None = None
 
@@ -71,8 +73,22 @@ def _optimize_image(file_bytes: bytes) -> bytes:
     return buffer.getvalue()
 
 
+def _read_limited(file: UploadFile, max_bytes: int) -> bytes:
+    chunks = []
+    total = 0
+    while True:
+        chunk = file.file.read(_READ_CHUNK_SIZE)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise BadRequestException(f"Uploaded file exceeds the {max_bytes // (1024 * 1024)}MB limit")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def upload_media(file: UploadFile, folder: str = "general") -> MediaUploadResponse:
-    file_bytes = file.file.read()
+    file_bytes = _read_limited(file, MAX_UPLOAD_BYTES)
     if not file_bytes:
         raise BadRequestException("Uploaded file is empty")
 

@@ -91,7 +91,12 @@ def create_product_review(
 
 
 @router.patch("/{product_id}/total-sales", response_model=ProductResponse)
-def update_product_total_sales(product_id: int, sales_in: ProductTotalSalesUpdate, db: Session = Depends(get_db)):
+def update_product_total_sales(
+    product_id: int,
+    sales_in: ProductTotalSalesUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_admin_user),
+):
     return service.update_product_total_sales(db, product_id, sales_in)
 
 

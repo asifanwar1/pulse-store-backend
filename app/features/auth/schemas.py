@@ -26,13 +26,7 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=100)
     phone_number: str | None = None
     address: Address = Field(default_factory=Address)
-    user_type: str = "CUSTOMER"
     password: str = Field(min_length=8, max_length=128)
-
-    @field_validator("user_type")
-    @classmethod
-    def validate_user_type(cls, v: str) -> str:
-        return _validate_user_type(v)
 
     @field_validator("password")
     @classmethod

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.exceptions import NotFoundException
 from app.core.money import to_decimal
+from app.core.utils import calculate_percentage_change
 from app.features.orders.models import Order, OrderItem, OrderStatus, PaymentMethod
 from app.features.products.models import Product
 from app.features.revenue.schemas import (
@@ -45,14 +46,6 @@ SORTABLE_REVENUE_COLUMNS = {
 
 def _money(value) -> Decimal:
     return to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-
-def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
-    if previous == 0:
-        if current == 0:
-            return Decimal("0.00")
-        return Decimal("100.00")
-    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _revenue_details_options():
@@ -181,15 +174,15 @@ def get_revenue_analytics(db: Session) -> RevenueAnalyticsResponse:
     return RevenueAnalyticsResponse(
         completedOrders=RevenueAnalyticsMetric(
             value=int(current_completed_orders),
-            change_percentage=_calculate_percentage_change(current_completed_orders, previous_completed_orders),
+            change_percentage=calculate_percentage_change(current_completed_orders, previous_completed_orders),
         ),
         totalRevenue=RevenueAnalyticsMetric(
             value=current_revenue,
-            change_percentage=_calculate_percentage_change(current_revenue, previous_revenue),
+            change_percentage=calculate_percentage_change(current_revenue, previous_revenue),
         ),
         totalProfit=RevenueAnalyticsMetric(
             value=current_profit,
-            change_percentage=_calculate_percentage_change(current_profit, previous_profit),
+            change_percentage=calculate_percentage_change(current_profit, previous_profit),
         ),
     )
 

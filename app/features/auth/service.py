@@ -15,7 +15,7 @@ from app.core.security import (
 )
 from app.core.exceptions import UnauthorizedException, ConflictException, BadRequestException
 from app.core.email import send_otp_email
-from app.features.users.models import User, UserStatus
+from app.features.users.models import User, UserStatus, UserType
 from app.features.users.schemas import Address
 from app.features.auth.models import OTPCode
 
@@ -99,9 +99,10 @@ def _verify_otp(db: Session, email: str, code: str, purpose: str) -> OTPCode:
 
 
 def _token_pair(user: User) -> dict:
+    claims = {"sub": str(user.id), "tv": user.token_version}
     return {
-        "token": create_access_token({"sub": str(user.id)}),
-        "refreshToken": create_refresh_token({"sub": str(user.id)}),
+        "token": create_access_token(claims),
+        "refreshToken": create_refresh_token(claims),
         "tokentype": "bearer",
     }
 
@@ -112,7 +113,6 @@ def register(
     full_name: str,
     password: str,
     phone_number: str | None = None,
-    user_type: str = "CUSTOMER",
     address: Address | None = None,
 ) -> dict:
     if db.query(User).filter(User.email == email).first():
@@ -123,7 +123,7 @@ def register(
         full_name=full_name,
         phone_number=phone_number,
         address=(address or Address()).model_dump(),
-        user_type=user_type,
+        user_type=UserType.CUSTOMER.value,
         status=UserStatus.INACTIVE.value,
         hashed_password=hash_password(password),
         is_active=False,
@@ -205,12 +205,10 @@ def refresh_tokens(db: Session, refresh_token: str) -> dict:
     user = db.query(User).filter(User.id == uid).first()
     if not user or not user.is_active or not user.is_verified or user.status != UserStatus.ACTIVE.value:
         raise UnauthorizedException("Account not found or is inactive")
+    if payload.get("tv") != user.token_version:
+        raise UnauthorizedException("Session has been invalidated")
 
-    return {
-        "token": create_access_token({"sub": str(user.id)}),
-        "refreshToken": create_refresh_token({"sub": str(user.id)}),
-        "tokentype": "bearer",
-    }
+    return _token_pair(user)
 
 
 def _find_user_by_email_and_type(db: Session, email: str, user_type: str) -> User | None:
@@ -256,6 +254,7 @@ def reset_password(db: Session, token: str, new_password: str) -> dict:
         raise BadRequestException("Invalid request")
 
     user.hashed_password = hash_password(new_password)
+    user.token_version += 1
     db.commit()
     return {"token": ""}
 

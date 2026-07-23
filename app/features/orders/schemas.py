@@ -8,7 +8,7 @@ from app.features.orders.models import OrderPaymentStatus, OrderStatus, PaymentM
 
 class OrderItemCreate(BaseModel):
     product_id: int
-    quantity: int
+    quantity: int = Field(ge=1)
 
 
 class OrderConfigResponse(BaseModel):

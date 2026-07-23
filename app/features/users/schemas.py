@@ -1,4 +1,4 @@
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_serializer, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, field_serializer, model_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
@@ -69,7 +69,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(
         default=None,
         validation_alias=AliasChoices("fullName", "full_name"),
@@ -79,10 +79,6 @@ class UserUpdate(BaseModel):
         validation_alias=AliasChoices("phoneNumber", "phone_number", "phone", "Phone"),
     )
     address: Optional[AddressUpdate] = None
-    user_type: Optional[str] = Field(
-        default=None,
-        validation_alias=AliasChoices("userType", "user_type"),
-    )
     password: Optional[str] = None
 
     @model_validator(mode="before")
@@ -114,6 +110,10 @@ class UserUpdate(BaseModel):
 
 class UserStatusUpdate(BaseModel):
     status: UserStatusFilter
+
+
+class UserRoleUpdate(BaseModel):
+    user_type: UserType = Field(validation_alias=AliasChoices("userType", "user_type"))
 
 
 class UserResponse(UserBase):

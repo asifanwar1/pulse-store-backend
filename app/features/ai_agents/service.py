@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.ai_agents import registry
 from app.core.ai_agents.messages import serialize_new_messages
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import BadRequestException, NotFoundException
 from app.features.ai_agents.models import AgentConfig, AgentMessage, Conversation, SupportTicket
 from app.features.ai_agents.schemas import (
     AgentConfigUpdate,
@@ -17,6 +17,8 @@ from app.features.ai_agents.schemas import (
 )
 from app.features.notifications import service as notifications_service
 from app.features.notifications.models import NotificationType
+from app.core.utils import calculate_percentage_change
+from app.features.ai_agents import model_catalog
 
 
 def get_or_create_agent_config(db: Session, agent_key: str) -> AgentConfig:
@@ -43,6 +45,10 @@ def list_agent_configs(db: Session) -> dict:
 def update_agent_config(db: Session, agent_key: str, update_in: AgentConfigUpdate, updated_by: int) -> AgentConfig:
     config = get_or_create_agent_config(db, agent_key)
     update_data = update_in.model_dump(exclude_unset=True)
+    if update_data.get("model_name"):
+        valid_models = {entry["model"] for entry in model_catalog.list_available_models()}
+        if update_data["model_name"] not in valid_models:
+            raise BadRequestException(f"Unknown model '{update_data['model_name']}'")
     for field, value in update_data.items():
         setattr(config, field, value)
     config.updated_by = updated_by
@@ -137,14 +143,6 @@ def list_support_tickets(db: Session, is_resolved: Optional[bool], page: int, li
     return {"data": tickets, "count": total_count}
 
 
-def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
-    if previous == 0:
-        if current == 0:
-            return Decimal("0.00")
-        return Decimal("100.00")
-    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-
 def _resolution_rate(resolved: int, total: int) -> int:
     if total == 0:
         return 0
@@ -170,19 +168,19 @@ def get_tickets_analytics(db: Session) -> SupportTicketAnalyticsResponse:
     return SupportTicketAnalyticsResponse(
         totalTickets=SupportTicketAnalyticsMetric(
             value=current_total,
-            change_percentage=_calculate_percentage_change(Decimal(current_total), Decimal(previous_total)),
+            change_percentage=calculate_percentage_change(Decimal(current_total), Decimal(previous_total)),
         ),
         resolvedTickets=SupportTicketAnalyticsMetric(
             value=current_resolved,
-            change_percentage=_calculate_percentage_change(Decimal(current_resolved), Decimal(previous_resolved)),
+            change_percentage=calculate_percentage_change(Decimal(current_resolved), Decimal(previous_resolved)),
         ),
         unresolvedTickets=SupportTicketAnalyticsMetric(
             value=current_unresolved,
-            change_percentage=_calculate_percentage_change(Decimal(current_unresolved), Decimal(previous_unresolved)),
+            change_percentage=calculate_percentage_change(Decimal(current_unresolved), Decimal(previous_unresolved)),
         ),
         resolutionRate=SupportTicketAnalyticsMetric(
             value=current_rate,
-            change_percentage=_calculate_percentage_change(Decimal(current_rate), Decimal(previous_rate)),
+            change_percentage=calculate_percentage_change(Decimal(current_rate), Decimal(previous_rate)),
         ),
     )
 

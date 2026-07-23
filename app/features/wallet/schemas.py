@@ -42,6 +42,7 @@ class PayOrderRequest(BaseModel):
 class PayOrderStatus(str, Enum):
     SUCCEEDED = "SUCCEEDED"
     REQUIRES_ACTION = "REQUIRES_ACTION"
+    PROCESSING = "PROCESSING"
     FAILED = "FAILED"
 
 

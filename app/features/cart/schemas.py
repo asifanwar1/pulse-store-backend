@@ -1,5 +1,5 @@
 from decimal import ROUND_HALF_UP, Decimal
-from pydantic import BaseModel, field_serializer, model_validator
+from pydantic import BaseModel, Field, field_serializer, model_validator
 from typing import Optional
 
 from app.features.products.schemas import ProductResponse
@@ -7,11 +7,11 @@ from app.features.products.schemas import ProductResponse
 
 class CartItemAdd(BaseModel):
     product_id: int
-    quantity: int = 1
+    quantity: int = Field(default=1, ge=1)
 
 
 class CartItemUpdate(BaseModel):
-    quantity: int
+    quantity: int = Field(ge=1)
 
 
 class CartItemResponse(BaseModel):

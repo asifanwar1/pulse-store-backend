@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.orm import Session
 from app.core.exceptions import NotFoundException
+from app.core.utils import calculate_percentage_change
 from app.features.products.models import ProductReview
 from app.features.products import service as products_service
 from app.features.reviews.schemas import (
@@ -70,12 +71,6 @@ def set_review_visibility(db: Session, review_id: int, visibility_in: ReviewVisi
     return _to_review_response(review)
 
 
-def _calculate_percentage_change(current: int, previous: int) -> Decimal:
-    if previous == 0:
-        return Decimal("100.00") if current > 0 else Decimal("0.00")
-    return ((Decimal(current) - Decimal(previous)) / Decimal(previous) * Decimal("100")).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
 
 
 def _bucket_products_by_rating(reviews: list[tuple[int, int]]) -> tuple[int, int, int]:
@@ -116,18 +111,18 @@ def get_reviews_analytics(db: Session) -> ReviewAnalyticsResponse:
     return ReviewAnalyticsResponse(
         total_reviews=ReviewAnalyticsMetric(
             value=current_total_reviews,
-            change_percentage=_calculate_percentage_change(current_total_reviews, previous_total_reviews),
+            change_percentage=calculate_percentage_change(current_total_reviews, previous_total_reviews),
         ),
         total_products_reviewed=ReviewAnalyticsMetric(
             value=current_reviewed,
-            change_percentage=_calculate_percentage_change(current_reviewed, previous_reviewed),
+            change_percentage=calculate_percentage_change(current_reviewed, previous_reviewed),
         ),
         products_with_bad_reviews=ReviewAnalyticsMetric(
             value=current_bad,
-            change_percentage=_calculate_percentage_change(current_bad, previous_bad),
+            change_percentage=calculate_percentage_change(current_bad, previous_bad),
         ),
         products_with_good_reviews=ReviewAnalyticsMetric(
             value=current_good,
-            change_percentage=_calculate_percentage_change(current_good, previous_good),
+            change_percentage=calculate_percentage_change(current_good, previous_good),
         ),
     )

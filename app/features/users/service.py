@@ -8,6 +8,7 @@ from app.features.users.models import User, UserStatus
 from app.features.users.schemas import (
     UserAnalyticsMetric,
     UserAnalyticsResponse,
+    UserRoleUpdate,
     UserSortDirection,
     UserStatusFilter,
     UserStatusUpdate,
@@ -15,7 +16,8 @@ from app.features.users.schemas import (
     UserUpdate,
 )
 from app.core.security import hash_password
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import ConflictException, NotFoundException
+from app.core.utils import calculate_percentage_change
 
 
 SORTABLE_USER_COLUMNS = {
@@ -29,14 +31,6 @@ SORTABLE_USER_COLUMNS = {
     "created_at": User.created_at,
     "updated_at": User.updated_at,
 }
-
-
-def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
-    if previous == 0:
-        if current == 0:
-            return Decimal("0.00")
-        return Decimal("100.00")
-    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _attach_order_stats(db: Session, users: list[User]) -> list[User]:
@@ -137,19 +131,19 @@ def get_users_analytics(db: Session) -> UserAnalyticsResponse:
     return UserAnalyticsResponse(
         totalCustomers=UserAnalyticsMetric(
             value=int(current_total),
-            change_percentage=_calculate_percentage_change(current_total, previous_total),
+            change_percentage=calculate_percentage_change(current_total, previous_total),
         ),
         activeCustomers=UserAnalyticsMetric(
             value=int(current_active),
-            change_percentage=_calculate_percentage_change(current_active, previous_active),
+            change_percentage=calculate_percentage_change(current_active, previous_active),
         ),
         InactiveCustomer=UserAnalyticsMetric(
             value=int(current_inactive),
-            change_percentage=_calculate_percentage_change(current_inactive, previous_inactive),
+            change_percentage=calculate_percentage_change(current_inactive, previous_inactive),
         ),
         blockedCustomer=UserAnalyticsMetric(
             value=int(current_blocked),
-            change_percentage=_calculate_percentage_change(current_blocked, previous_blocked),
+            change_percentage=calculate_percentage_change(current_blocked, previous_blocked),
         ),
     )
 
@@ -212,8 +206,11 @@ def get_users(
 
 def update_user(db: Session, user_id: int, user_in: UserUpdate) -> User:
     user = get_user_by_id(db, user_id)
-    if user_in.email is not None:
+    if user_in.email is not None and user_in.email != user.email:
+        if db.query(User).filter(User.email == user_in.email, User.id != user_id).first():
+            raise ConflictException("An account with this email already exists")
         user.email = user_in.email
+        user.is_verified = False
     if user_in.full_name is not None:
         user.full_name = user_in.full_name
     if user_in.phone_number is not None:
@@ -222,10 +219,17 @@ def update_user(db: Session, user_id: int, user_in: UserUpdate) -> User:
         current_address = user.address if isinstance(user.address, dict) else {}
         address_updates = user_in.address.model_dump(exclude_unset=True, exclude_none=True)
         user.address = {**current_address, **address_updates}
-    if user_in.user_type is not None:
-        user.user_type = user_in.user_type
     if user_in.password is not None:
         user.hashed_password = hash_password(user_in.password)
+        user.token_version += 1
+    db.commit()
+    db.refresh(user)
+    return _attach_order_stats(db, [user])[0]
+
+
+def update_user_role(db: Session, user_id: int, role_in: UserRoleUpdate) -> User:
+    user = get_user_by_id(db, user_id)
+    user.user_type = role_in.user_type.value
     db.commit()
     db.refresh(user)
     return _attach_order_stats(db, [user])[0]

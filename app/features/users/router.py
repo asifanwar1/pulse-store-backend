@@ -7,6 +7,7 @@ from app.features.users.schemas import (
     UserAnalyticsResponse,
     UserListResponse,
     UserResponse,
+    UserRoleUpdate,
     UserSortDirection,
     UserStatusFilter,
     UserStatusUpdate,
@@ -70,6 +71,16 @@ def update_user_status(
     _=Depends(get_current_admin_user),
 ):
     return service.update_user_status(db, user_id, status_in)
+
+
+@router.patch("/{user_id}/role", response_model=UserResponse)
+def update_user_role(
+    user_id: int,
+    role_in: UserRoleUpdate,
+    db: Session = Depends(get_db),
+    _=Depends(get_current_admin_user),
+):
+    return service.update_user_role(db, user_id, role_in)
 
 
 @router.delete("/{user_id}", status_code=204)

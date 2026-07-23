@@ -27,7 +27,7 @@ from app.features.products.schemas import (
 )
 from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException, ConflictException
 from app.core.money import to_decimal
-import re
+from app.core.utils import calculate_percentage_change, slugify
 
 
 SORTABLE_PRODUCT_COLUMNS = {
@@ -44,13 +44,8 @@ SORTABLE_PRODUCT_COLUMNS = {
 }
 
 
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "product"
-
-
 def _generate_product_slug(name: str, sku: str) -> str:
-    return _slugify(f"{name}-{sku}")
+    return slugify(f"{name}-{sku}", fallback="product")
 
 
 def _require_category_id(db: Session, category_id: int) -> int:
@@ -70,14 +65,6 @@ def _status_to_flags(status: ProductStatusFilter, stock_quantity: int) -> bool:
     if stock_quantity > 0:
         raise BadRequestException("stock_quantity must be 0 when status is OUT_OF_STOCK")
     return True
-
-
-def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
-    if previous == 0:
-        if current == 0:
-            return Decimal("0.00")
-        return Decimal("100.00")
-    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def get_products_analytics(db: Session) -> ProductAnalyticsResponse:
@@ -109,19 +96,19 @@ def get_products_analytics(db: Session) -> ProductAnalyticsResponse:
     return ProductAnalyticsResponse(
         total_products=ProductAnalyticsMetric(
             value=int(current_total),
-            change_percentage=_calculate_percentage_change(current_total, previous_total),
+            change_percentage=calculate_percentage_change(current_total, previous_total),
         ),
         active_products=ProductAnalyticsMetric(
             value=int(current_active),
-            change_percentage=_calculate_percentage_change(current_active, previous_active),
+            change_percentage=calculate_percentage_change(current_active, previous_active),
         ),
         out_of_stock_products=ProductAnalyticsMetric(
             value=int(current_out_of_stock),
-            change_percentage=_calculate_percentage_change(current_out_of_stock, previous_out_of_stock),
+            change_percentage=calculate_percentage_change(current_out_of_stock, previous_out_of_stock),
         ),
         average_price=ProductAnalyticsMetric(
             value=current_average_price,
-            change_percentage=_calculate_percentage_change(current_average_price, previous_average_price),
+            change_percentage=calculate_percentage_change(current_average_price, previous_average_price),
         ),
     )
 

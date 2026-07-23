@@ -22,6 +22,7 @@ from app.features.shipments.schemas import (
     ShipmentTrackingEventCreate,
     ShipmentUpdate,
 )
+from app.core.utils import calculate_percentage_change
 
 
 SORTABLE_SHIPMENT_COLUMNS = {
@@ -56,14 +57,6 @@ FAILED_STATUSES = (
     ShipmentStatus.CANCELLED,
     ShipmentStatus.RETURNED,
 )
-
-
-def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
-    if previous == 0:
-        if current == 0:
-            return Decimal("0.00")
-        return Decimal("100.00")
-    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _get_order(db: Session, order_id: int) -> Order:
@@ -235,19 +228,19 @@ def get_shipments_analytics(db: Session) -> ShipmentAnalyticsResponse:
     return ShipmentAnalyticsResponse(
         totalShipments=ShipmentAnalyticsMetric(
             value=int(current_total),
-            change_percentage=_calculate_percentage_change(current_total, previous_total),
+            change_percentage=calculate_percentage_change(current_total, previous_total),
         ),
         inTransit=ShipmentAnalyticsMetric(
             value=int(current_in_transit),
-            change_percentage=_calculate_percentage_change(current_in_transit, previous_in_transit),
+            change_percentage=calculate_percentage_change(current_in_transit, previous_in_transit),
         ),
         delivered=ShipmentAnalyticsMetric(
             value=int(current_delivered),
-            change_percentage=_calculate_percentage_change(current_delivered, previous_delivered),
+            change_percentage=calculate_percentage_change(current_delivered, previous_delivered),
         ),
         failed=ShipmentAnalyticsMetric(
             value=int(current_failed),
-            change_percentage=_calculate_percentage_change(current_failed, previous_failed),
+            change_percentage=calculate_percentage_change(current_failed, previous_failed),
         ),
     )
 

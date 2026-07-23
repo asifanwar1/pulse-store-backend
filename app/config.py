@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:5176"
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
 
     # Email / SMTP
     SMTP_HOST: str = "smtp.gmail.com"
@@ -30,6 +35,7 @@ class Settings(BaseSettings):
     # Stripe (test/sandbox mode)
     STRIPE_SECRET_KEY: str = ""
     STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
     DEFAULT_CURRENCY: str = "usd"
 
     # AI Agents
@@ -39,6 +45,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     AI_CHAT_MAX_HISTORY_TURNS: int = 20
+    AI_REQUEST_TIMEOUT_SECONDS: float = 60.0
+    AI_MAX_OUTPUT_TOKENS: int = 2000
+    AI_MAX_MODEL_REQUESTS: int = 15
+    """Caps tool-call round trips within a single chat turn (pydantic-ai's request_limit)."""
 
     # Firebase (push notifications)
     FIREBASE_CREDENTIALS_JSON: str = ""

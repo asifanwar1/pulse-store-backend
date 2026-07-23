@@ -50,6 +50,8 @@ def get_current_user(
     user = db.query(User).filter(User.id == uid).first()
     if not user or not user.is_active or not user.is_verified or user.status != UserStatus.ACTIVE.value:
         raise UnauthorizedException()
+    if payload.get("tv") != user.token_version:
+        raise UnauthorizedException()
     return user
 
 

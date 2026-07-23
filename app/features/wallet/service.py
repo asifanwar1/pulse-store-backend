@@ -2,6 +2,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 import stripe
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -9,6 +10,7 @@ from app.core.exceptions import BadRequestException, ConflictException, NotFound
 from app.core.money import to_decimal
 from app.features.notifications import service as notifications_service
 from app.features.notifications.models import NotificationType
+from app.features.orders import service as orders_service
 from app.features.orders.models import Order, OrderPaymentStatus, OrderStatus
 from app.features.users.models import User
 from app.features.wallet.models import PaymentStatus, Wallet, WalletPaymentMethod, WalletTransaction
@@ -41,7 +43,14 @@ def get_or_create_wallet(db: Session, user: User) -> Wallet:
 
     wallet = Wallet(user_id=user.id, stripe_customer_id=customer.id)
     db.add(wallet)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = _get_wallet_or_none(db, user)
+        if existing:
+            return existing
+        raise
     db.refresh(wallet)
     return wallet
 
@@ -266,7 +275,7 @@ def pay_for_order(db: Session, user: User, order_id: int, payment_method_id: Opt
             db, wallet, order, PaymentStatus.SUCCEEDED, stripe_payment_intent_id=intent.id)
         order.payment_status = OrderPaymentStatus.PAID
         if order.status == OrderStatus.PENDING:
-            order.status = OrderStatus.PROCESSING
+            orders_service.apply_order_status(order, OrderStatus.PROCESSING, note="Payment received")
         db.commit()
         notifications_service.create_notification(
             db,
@@ -294,9 +303,9 @@ def pay_for_order(db: Session, user: User, order_id: int, payment_method_id: Opt
             db, wallet, order, PaymentStatus.PROCESSING, stripe_payment_intent_id=intent.id)
         db.commit()
         return PayOrderResponse(
-            status=PayOrderStatus.FAILED,
+            status=PayOrderStatus.PROCESSING,
             order_id=order.id,
-            message="Payment is still processing. Please check back shortly.",
+            message="Payment is still processing. We'll update your order once it clears.",
         )
 
     _record_transaction(
@@ -310,3 +319,76 @@ def pay_for_order(db: Session, user: User, order_id: int, payment_method_id: Opt
         order_id=order.id,
         message=f"Payment could not be completed (status: {intent.status})",
     )
+
+
+def handle_stripe_webhook(db: Session, payload: bytes, sig_header: Optional[str]) -> None:
+    """Reconcile orders against async Stripe payment outcomes (3-D Secure, delayed
+    processing) that pay_for_order's synchronous response can't observe."""
+    if not settings.STRIPE_WEBHOOK_SECRET:
+        raise BadRequestException("Stripe webhook is not configured")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        raise BadRequestException("Invalid webhook signature")
+
+    event_type = event["type"]
+    if event_type not in ("payment_intent.succeeded", "payment_intent.payment_failed", "payment_intent.processing"):
+        return
+
+    intent = event["data"]["object"]
+
+    transaction = (
+        db.query(WalletTransaction)
+        .filter(WalletTransaction.stripe_payment_intent_id == intent["id"])
+        .first()
+    )
+    if not transaction:
+        return
+
+    order = (
+        db.query(Order)
+        .filter(Order.id == transaction.order_id)
+        .with_for_update()
+        .first()
+    )
+    if not order or order.payment_status == OrderPaymentStatus.PAID:
+        return
+
+    if event_type == "payment_intent.succeeded":
+        if transaction.status == PaymentStatus.SUCCEEDED:
+            return
+        transaction.status = PaymentStatus.SUCCEEDED
+        order.payment_status = OrderPaymentStatus.PAID
+        if order.status == OrderStatus.PENDING:
+            orders_service.apply_order_status(order, OrderStatus.PROCESSING, note="Payment received")
+        db.commit()
+        notifications_service.create_notification(
+            db,
+            order.user_id,
+            NotificationType.WALLET_PAYMENT_SUCCEEDED,
+            title="Payment successful",
+            body=f"Your payment for order #{order.id} was successful.",
+            entity_type="order",
+            entity_id=order.id,
+        )
+    elif event_type == "payment_intent.payment_failed":
+        if transaction.status == PaymentStatus.FAILED:
+            return
+        last_error = intent["last_payment_error"] if "last_payment_error" in intent else None
+        transaction.status = PaymentStatus.FAILED
+        transaction.failure_message = last_error["message"] if last_error and "message" in last_error else None
+        db.commit()
+        notifications_service.create_notification(
+            db,
+            order.user_id,
+            NotificationType.WALLET_PAYMENT_FAILED,
+            title="Payment failed",
+            body=f"Payment for order #{order.id} failed: {transaction.failure_message or 'unknown error'}",
+            entity_type="order",
+            entity_id=order.id,
+        )
+    elif event_type == "payment_intent.processing":
+        if transaction.status == PaymentStatus.PROCESSING:
+            return
+        transaction.status = PaymentStatus.PROCESSING
+        db.commit()

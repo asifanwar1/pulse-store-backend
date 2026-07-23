@@ -2,16 +2,11 @@ from sqlalchemy.orm import Session
 from app.features.categories.models import Category
 from app.features.categories.schemas import CategoryCreate, CategoryUpdate
 from app.core.exceptions import NotFoundException
-import re
-
-
-def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or "category"
+from app.core.utils import slugify
 
 
 def _generate_unique_slug(db: Session, name: str, category_id: int | None = None) -> str:
-    base_slug = _slugify(name)
+    base_slug = slugify(name, fallback="category")
     slug = base_slug
     counter = 2
 

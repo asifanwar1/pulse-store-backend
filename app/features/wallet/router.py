@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from app.dependencies import get_db
@@ -68,3 +68,14 @@ def pay_for_order(
     current_user: User = Depends(get_current_user),
 ):
     return service.pay_for_order(db, current_user, payload.order_id, payload.payment_method_id)
+
+
+@router.post("/webhook", include_in_schema=False)
+async def stripe_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    stripe_signature: str | None = Header(default=None, alias="Stripe-Signature"),
+):
+    payload = await request.body()
+    service.handle_stripe_webhook(db, payload, stripe_signature)
+    return {"received": True}

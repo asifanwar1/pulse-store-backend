@@ -11,6 +11,7 @@ from app.features.products.models import Product
 from app.features.shipments.models import Shipment
 from app.features.users.models import User, UserType
 from app.core.money import to_decimal
+from app.core.utils import calculate_percentage_change
 from app.features.dashboard.schemas import (
     CustomerGrowthItem,
     CustomerGrowthResponse,
@@ -41,14 +42,6 @@ def _money(value) -> Decimal:
 
 def _percentage(value) -> Decimal:
     return to_decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-
-def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
-    if previous == 0:
-        if current == 0:
-            return Decimal("0.00")
-        return Decimal("100.00")
-    return _percentage((current - previous) / previous * Decimal("100"))
 
 
 def _period_start(days: int = 30) -> datetime:
@@ -184,27 +177,27 @@ def get_dashboard_stats(db: Session) -> DashboardStatsResponse:
     return DashboardStatsResponse(
         totalRevenue=DashboardMetric(
             value=total_revenue,
-            change_percentage=_calculate_percentage_change(current_revenue, previous_revenue),
+            change_percentage=calculate_percentage_change(current_revenue, previous_revenue),
         ),
         totalOrders=DashboardMetric(
             value=len(orders),
-            change_percentage=_calculate_percentage_change(Decimal(len(current_orders)), Decimal(len(previous_orders))),
+            change_percentage=calculate_percentage_change(Decimal(len(current_orders)), Decimal(len(previous_orders))),
         ),
         totalCustomers=DashboardMetric(
             value=total_customers,
-            change_percentage=_calculate_percentage_change(Decimal(current_customers), Decimal(previous_customers)),
+            change_percentage=calculate_percentage_change(Decimal(current_customers), Decimal(previous_customers)),
         ),
         totalProducts=DashboardMetric(
             value=total_products,
-            change_percentage=_calculate_percentage_change(Decimal(current_products), Decimal(previous_products)),
+            change_percentage=calculate_percentage_change(Decimal(current_products), Decimal(previous_products)),
         ),
         avgOrderValue=DashboardMetric(
             value=avg_order_value,
-            change_percentage=_calculate_percentage_change(current_avg_order_value, previous_avg_order_value),
+            change_percentage=calculate_percentage_change(current_avg_order_value, previous_avg_order_value),
         ),
         conversionRate=DashboardMetric(
             value=conversion_rate,
-            change_percentage=_calculate_percentage_change(current_conversion_rate, previous_conversion_rate),
+            change_percentage=calculate_percentage_change(current_conversion_rate, previous_conversion_rate),
         ),
     )
 
@@ -392,7 +385,7 @@ def get_top_products(db: Session, limit: int = 6) -> TopProductsResponse:
                 revenue=_money(values["revenue"]),
                 sales=int(values["sales"]),
                 stock=product.stock_quantity,
-                change_percentage=_calculate_percentage_change(
+                change_percentage=calculate_percentage_change(
                     _money(values["current_revenue"]),
                     _money(values["previous_revenue"]),
                 ),

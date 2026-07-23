@@ -6,6 +6,7 @@ from slowapi import _rate_limit_exceeded_handler
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from app.config import settings
 from app.core.limiter import limiter
 
 logger = logging.getLogger(__name__)
@@ -29,19 +30,20 @@ from app.features.notifications.router import router as notifications_router
 
 app = FastAPI(title="Pulse Store API", version="1.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-                   "http://localhost:5174", "http://localhost:5176"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Rate-limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+# Added last so it's outermost -- otherwise a 429 from SlowAPIMiddleware never
+# passes back through CORSMiddleware and browser clients can't read the response.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.exception_handler(Exception)

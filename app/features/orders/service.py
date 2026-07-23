@@ -20,11 +20,14 @@ from app.features.products.models import Product
 from app.features.users.models import User
 from app.core.exceptions import NotFoundException, ConflictException
 from app.core.money import to_decimal
+from app.core.utils import calculate_percentage_change
 
 
 DEFAULT_SHIPPING_FEE = Decimal("5.99")
 
 ORDER_SETTINGS_ID = 1
+
+TERMINAL_ORDER_STATUSES = (OrderStatus.DELIVERED, OrderStatus.CANCELLED)
 
 
 SORTABLE_ORDER_COLUMNS = {
@@ -41,14 +44,6 @@ SORTABLE_ORDER_COLUMNS = {
     "updated_at": Order.updated_at,
     "updatedAt": Order.updated_at,
 }
-
-
-def _calculate_percentage_change(current: Decimal, previous: Decimal) -> Decimal:
-    if previous == 0:
-        if current == 0:
-            return Decimal("0.00")
-        return Decimal("100.00")
-    return ((current - previous) / previous * Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def apply_order_status(
@@ -68,6 +63,10 @@ def apply_order_status(
     """
     if not force and order.status == status:
         return False
+    if not force and order.status in TERMINAL_ORDER_STATUSES:
+        raise ConflictException(
+            f"Order is already {order.status.value.lower()} and cannot change status")
+    previous_status = order.status
     order.status = status
     order.tracking.append(
         OrderStatusHistory(
@@ -76,6 +75,10 @@ def apply_order_status(
             changed_by_user_id=changed_by_user_id,
         )
     )
+    if status == OrderStatus.CANCELLED and previous_status != OrderStatus.CANCELLED:
+        for item in order.items:
+            if item.product is not None:
+                item.product.stock_quantity += item.quantity
     return True
 
 
@@ -142,22 +145,22 @@ def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:
     return OrderAnalyticsResponse(
         totalOrders=OrderAnalyticsMetric(
             value=int(current_total),
-            change_percentage=_calculate_percentage_change(
+            change_percentage=calculate_percentage_change(
                 current_total, previous_total),
         ),
         pendingOrders=OrderAnalyticsMetric(
             value=int(current_pending),
-            change_percentage=_calculate_percentage_change(
+            change_percentage=calculate_percentage_change(
                 current_pending, previous_pending),
         ),
         shippedOrders=OrderAnalyticsMetric(
             value=int(current_shipped),
-            change_percentage=_calculate_percentage_change(
+            change_percentage=calculate_percentage_change(
                 current_shipped, previous_shipped),
         ),
         revenue=OrderAnalyticsMetric(
             value=current_revenue,
-            change_percentage=_calculate_percentage_change(
+            change_percentage=calculate_percentage_change(
                 current_revenue, previous_revenue),
         ),
     )
@@ -226,8 +229,14 @@ def create_order(db: Session, order_in: OrderCreate, actor_user_id: Optional[int
         raise NotFoundException(f"User {order_in.user_id} not found")
 
     product_ids = {item.product_id for item in order_in.items}
-    products_by_id = {product.id: product for product in db.query(
-        Product).filter(Product.id.in_(product_ids)).all()}
+    products_by_id = {
+        product.id: product
+        for product in db.query(Product)
+        .filter(Product.id.in_(product_ids))
+        .order_by(Product.id)
+        .with_for_update()
+        .all()
+    }
 
     resolved_items = []
     for item in order_in.items:
