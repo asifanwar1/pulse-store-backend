@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import AsyncGenerator, Optional
 
+from pydantic_ai import ModelHTTPError, UnexpectedModelBehavior
 from pydantic_ai.usage import UsageLimits
 from sqlalchemy.orm import Session
 
@@ -149,46 +150,63 @@ async def stream_agent_chat(
 ) -> AsyncGenerator[str, None]:
     from app.features.ai_agents import service as ai_service
 
-    reply_chunks: list[str] = []
-    result = None
-    try:
-        async with ctx.definition.agent.run_stream(
-            _append_media_block(message, media),
-            deps=ctx.deps,
-            message_history=ctx.history,
-            model=ctx.model_name,
-            model_settings={"timeout": settings.AI_REQUEST_TIMEOUT_SECONDS},
-            usage_limits=UsageLimits(
-                request_limit=settings.AI_MAX_MODEL_REQUESTS,
-                output_tokens_limit=settings.AI_MAX_OUTPUT_TOKENS,
-            ),
-        ) as result:
+    max_attempts = settings.AI_MODEL_RETRY_ATTEMPTS + 1
+    for attempt in range(1, max_attempts + 1):
+        reply_chunks: list[str] = []
+        result = None
+        try:
+            async with ctx.definition.agent.run_stream(
+                _append_media_block(message, media),
+                deps=ctx.deps,
+                message_history=ctx.history,
+                model=ctx.model_name,
+                model_settings={
+                    "timeout": settings.AI_REQUEST_TIMEOUT_SECONDS},
+                usage_limits=UsageLimits(
+                    request_limit=settings.AI_MAX_MODEL_REQUESTS,
+                    output_tokens_limit=settings.AI_MAX_OUTPUT_TOKENS,
+                ),
+            ) as result:
 
-            async for chunk in result.stream_text(delta=True):
-                reply_chunks.append(chunk)
+                async for chunk in result.stream_text(delta=True):
+                    reply_chunks.append(chunk)
 
-            reply_text = _sanitize_reply("".join(reply_chunks))
-            reply_chunks = [reply_text]
-            for piece in _chunk_for_typing(reply_text):
-                yield _sse({"type": "delta", "text": piece})
+                reply_text = _sanitize_reply("".join(reply_chunks))
+                reply_chunks = [reply_text]
+                for piece in _chunk_for_typing(reply_text):
+                    yield _sse({"type": "delta", "text": piece})
 
-            ai_service.append_turn(
-                ctx.db, ctx.conversation_id, result.new_messages(), reply_text=reply_text)
-    except Exception as exc:
-        logger.exception(
-            "AI agent stream failed for conversation %s", ctx.conversation_id)
-        if reply_chunks and result is not None:
-            try:
                 ai_service.append_turn(
-                    ctx.db,
-                    ctx.conversation_id,
-                    result.new_messages(),
-                    reply_text=_sanitize_reply("".join(reply_chunks)),
-                )
-            except Exception:
+                    ctx.db, ctx.conversation_id, result.new_messages(), reply_text=reply_text)
+        except (ModelHTTPError, UnexpectedModelBehavior) as exc:
+
+            if attempt >= max_attempts:
                 logger.exception(
-                    "Failed to persist partial turn for conversation %s", ctx.conversation_id)
-        yield _sse({"type": "error", "message": str(exc)})
-        return
+                    "AI agent model call kept failing for conversation %s", ctx.conversation_id)
+                yield _sse({"type": "error", "message": "The assistant hit a temporary error. Please try again."})
+                return
+            logger.warning(
+                "AI agent model call failed for conversation %s (attempt %s/%s), retrying: %s",
+                ctx.conversation_id, attempt, max_attempts, exc,
+            )
+            continue
+        except Exception as exc:
+            logger.exception(
+                "AI agent stream failed for conversation %s", ctx.conversation_id)
+            if reply_chunks and result is not None:
+                try:
+                    ai_service.append_turn(
+                        ctx.db,
+                        ctx.conversation_id,
+                        result.new_messages(),
+                        reply_text=_sanitize_reply("".join(reply_chunks)),
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to persist partial turn for conversation %s", ctx.conversation_id)
+            yield _sse({"type": "error", "message": str(exc)})
+            return
+        else:
+            break
 
     yield _sse({"type": "done", "conversation_id": ctx.conversation_id})

@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     AI_MAX_OUTPUT_TOKENS: int = 2000
     AI_MAX_MODEL_REQUESTS: int = 15
     """Caps tool-call round trips within a single chat turn (pydantic-ai's request_limit)."""
+    AI_MODEL_RETRY_ATTEMPTS: int = 2
+    """Extra attempts for the whole chat turn when the provider itself fails to produce a
+    usable response (e.g. Groq's Llama 3.3 models occasionally malform a tool call badly
+    enough that Groq rejects it outright rather than pydantic-ai getting a chance to retry
+    it). Doesn't cover ordinary tool-argument errors -- those already retry via ModelRetry."""
 
     # Firebase (push notifications)
     FIREBASE_CREDENTIALS_JSON: str = ""

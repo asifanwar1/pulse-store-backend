@@ -8,10 +8,11 @@ from app.config import settings
 from app.core.ai_agents.deps import AgentDeps, bind_dynamic_system_prompt, tool_db_session
 from app.core.ai_agents.registry import AgentDefinition, register_agent
 from app.core.exceptions import BadRequestException, ConflictException, NotFoundException
+from app.features.ai_agents.models import Conversation
 from app.features.categories import service as categories_service
 from app.features.media.schemas import MediaItem
 from app.features.products import service as products_service
-from app.features.products.schemas import ProductCreate, ProductStatusFilter
+from app.features.products.schemas import ProductCreate, ProductStatusFilter, ProductUpdate
 
 SYSTEM_PROMPT = """\
 You help a Pulse Store admin draft new product listings through conversation.
@@ -31,6 +32,11 @@ see the raw image bytes, only this listing. Treat the images in that block as at
 whichever message they appear on; carry them forward into the eventual media list you pass
 to create_product_draft (build each entry as {"id": ..., "url": ..., "file_name": ...}).
 Don't ask the admin to re-describe images already listed in an "[Attached images]" block.
+
+Once the product has been created in this conversation, you can also use update_product_draft
+to change any of its fields (e.g. fixing a typo in the name, adjusting a price the admin
+missed). This only works on that one product — you have no way to look up or edit any other
+product, so if asked to edit something else, say so plainly rather than guessing.
 """
 
 agent = Agent(deps_type=AgentDeps)
@@ -57,7 +63,8 @@ def list_categories(ctx: RunContext[AgentDeps], search: Optional[str] = None) ->
     as the call arguments), so this always keeps at least one real, useful parameter.
     """
     with tool_db_session() as db:
-        result = categories_service.get_categories(db, search=search, limit=200)
+        result = categories_service.get_categories(
+            db, search=search, limit=200)
         return [CategoryOut(id=c.id, name=c.name, slug=c.slug) for c in result["data"]]
 
 
@@ -115,6 +122,68 @@ def create_product_draft(
     try:
         with tool_db_session() as db:
             product = products_service.create_product(db, product_in)
+            product_id, product_slug = product.id, product.slug
+
+            conversation = db.query(Conversation).filter(
+                Conversation.id == ctx.deps.conversation_id).first()
+            if conversation is not None:
+                conversation.created_product_id = product_id
+                db.commit()
+    except (ConflictException, NotFoundException, BadRequestException) as exc:
+        raise ModelRetry(str(exc.detail)) from exc
+
+    return ProductDraftResult(success=True, product_id=product_id, slug=product_slug)
+
+
+@agent.tool
+def update_product_draft(
+    ctx: RunContext[AgentDeps],
+    name: Optional[str] = None,
+    sku: Optional[str] = None,
+    brand: Optional[str] = None,
+    description: Optional[str] = None,
+    retail_price: Optional[str] = None,
+    cost_price: Optional[str] = None,
+    stock_quantity: Optional[int] = None,
+    category_id: Optional[int] = None,
+    status: Optional[ProductStatusFilter] = None,
+    tags: Optional[list[str]] = None,
+    media: Optional[list[MediaItem]] = None,
+) -> ProductDraftResult:
+    update_data = {
+        k: v
+        for k, v in {
+            "name": name,
+            "sku": sku,
+            "brand": brand,
+            "description": description,
+            "stock_quantity": stock_quantity,
+            "category_id": category_id,
+            "status": status,
+            "tags": tags,
+            "media": media,
+        }.items()
+        if v is not None
+    }
+
+    try:
+        if retail_price is not None:
+            update_data["retail_price"] = Decimal(retail_price)
+        if cost_price is not None:
+            update_data["cost_price"] = Decimal(cost_price)
+        product_in = ProductUpdate(**update_data)
+    except (ValidationError, InvalidOperation) as exc:
+        raise ModelRetry(str(exc)) from exc
+
+    try:
+        with tool_db_session() as db:
+            conversation = db.query(Conversation).filter(
+                Conversation.id == ctx.deps.conversation_id).first()
+            if conversation is None or conversation.created_product_id is None:
+                raise ModelRetry(
+                    "No product has been created in this conversation yet -- create one first.")
+            product = products_service.update_product(
+                db, conversation.created_product_id, product_in)
     except (ConflictException, NotFoundException, BadRequestException) as exc:
         raise ModelRetry(str(exc.detail)) from exc
 

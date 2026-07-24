@@ -43,6 +43,9 @@ class Conversation(Base):
     agent_key = Column(String, nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String, nullable=True)
+    created_product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    """Set by product_listing's create_product_draft -- lets update_product_draft edit only
+    the product this conversation itself created, never an arbitrary one."""
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
