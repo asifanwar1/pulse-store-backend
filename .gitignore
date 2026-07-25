@@ -10,3 +10,4 @@ build/
 .coverage
 get-pip.py
 secrets/
+.claude/
