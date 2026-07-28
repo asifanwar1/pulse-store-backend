@@ -17,6 +17,32 @@ from app.features.users.models import User
 
 logger = logging.getLogger(__name__)
 
+try:
+    from groq import APIError as _GroqAPIError
+except ImportError:  # pragma: no cover - groq is an optional provider extra
+    _PROVIDER_STREAM_ERRORS: tuple[type[BaseException], ...] = ()
+else:
+    _PROVIDER_STREAM_ERRORS = (_GroqAPIError,)
+
+_RETRYABLE_MODEL_ERRORS: tuple[type[BaseException], ...] = (
+    ModelHTTPError,
+    UnexpectedModelBehavior,
+) + _PROVIDER_STREAM_ERRORS
+"""Model-side failures worth another attempt rather than surfacing to the user.
+
+`_GroqAPIError` is in here because of a gap in pydantic-ai's Groq handling. Llama models
+on Groq intermittently emit a tool call as literal text (`<function=name {...}</function>`)
+instead of a structured tool call; Groq rejects it mid-stream with `code: tool_use_failed`.
+The groq SDK raises a bare `APIError` for mid-stream errors -- not the `APIStatusError`
+that pydantic-ai's `_map_api_errors` converts into `ModelHTTPError` -- and pydantic-ai's
+own `tool_use_failed` recovery lives in `GroqStreamedResponse._get_event_iterator`, which
+never runs when the error arrives as the *first* chunk (it is raised earlier, from the
+`peek()` in `_process_streamed_response`). So the raw provider error escapes to us.
+
+Retrying is a safety net, not a cure: the malformed-tool-call rate is per-request and high
+enough on llama-3.3-70b that the real fix is running these agents on a model with reliable
+tool calling (see AI_DEFAULT_MODEL)."""
+
 
 @dataclass
 class ChatContext:
@@ -178,7 +204,7 @@ async def stream_agent_chat(
 
                 ai_service.append_turn(
                     ctx.db, ctx.conversation_id, result.new_messages(), reply_text=reply_text)
-        except (ModelHTTPError, UnexpectedModelBehavior) as exc:
+        except _RETRYABLE_MODEL_ERRORS as exc:
 
             if attempt >= max_attempts:
                 logger.exception(
@@ -190,7 +216,7 @@ async def stream_agent_chat(
                 ctx.conversation_id, attempt, max_attempts, exc,
             )
             continue
-        except Exception as exc:
+        except Exception:
             logger.exception(
                 "AI agent stream failed for conversation %s", ctx.conversation_id)
             if reply_chunks and result is not None:
@@ -204,7 +230,7 @@ async def stream_agent_chat(
                 except Exception:
                     logger.exception(
                         "Failed to persist partial turn for conversation %s", ctx.conversation_id)
-            yield _sse({"type": "error", "message": str(exc)})
+            yield _sse({"type": "error", "message": "The assistant couldn't finish that reply. Please try again."})
             return
         else:
             break

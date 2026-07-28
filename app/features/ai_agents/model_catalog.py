@@ -15,16 +15,16 @@ class _CatalogEntry:
 
 _CATALOG: list[_CatalogEntry] = [
     _CatalogEntry(
+        "groq:openai/gpt-oss-20b", "groq", "GPT-OSS 20B (via Groq)",
+        "Recommended default — reliable tool-calling, good speed", "GROQ_API_KEY",
+    ),
+    _CatalogEntry(
         "groq:llama-3.3-70b-versatile", "groq", "Llama 3.3 70B Versatile",
-        "Recommended default — balanced quality and speed", "GROQ_API_KEY",
+        "Not recommended — frequently malforms tool calls, so chats error out", "GROQ_API_KEY",
     ),
     _CatalogEntry(
         "groq:llama-3.1-8b-instant", "groq", "Llama 3.1 8B Instant",
-        "Fastest — lighter reasoning, good for quick testing", "GROQ_API_KEY",
-    ),
-    _CatalogEntry(
-        "groq:openai/gpt-oss-20b", "groq", "GPT-OSS 20B (via Groq)",
-        "Strong tool-calling, OpenAI's open-weight model", "GROQ_API_KEY",
+        "Fastest — lighter reasoning; shares Llama's tool-calling unreliability", "GROQ_API_KEY",
     ),
     _CatalogEntry(
         "groq:openai/gpt-oss-120b", "groq", "GPT-OSS 120B (via Groq)",

@@ -11,6 +11,11 @@ class OrderStatus(str, enum.Enum):
     PROCESSING = "PROCESSING"
     SHIPPING = "SHIPPING"
     SHIPPED = "SHIPPED"
+    """Retired: no code path sets this anymore (see update_order_status() and
+    shipments/service.py's _sync_order_status(), which only ever write SHIPPING).
+    Kept as a member -- rather than removed -- solely so existing
+    OrderStatusHistory rows recorded before the retirement stay readable;
+    removing it would break ORM deserialization of that historical data."""
     DELIVERED = "DELIVERED"
     CANCELLED = "CANCELLED"
 

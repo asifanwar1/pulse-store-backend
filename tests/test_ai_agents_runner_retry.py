@@ -1,6 +1,8 @@
 import asyncio
 import json
 
+import httpx
+from groq import APIError as GroqAPIError
 from pydantic_ai import ModelHTTPError
 
 from app.config import settings
@@ -91,6 +93,61 @@ def test_stream_agent_chat_retries_once_after_groq_tool_use_failed(monkeypatch):
     assert [e["type"] for e in events] == ["delta", "done"]
     assert events[0]["text"] == "It worked."
     assert saved == ["It worked."]
+
+
+def _groq_tool_use_failed_error():
+    """The exact exception Groq's SDK raises when the model emits a tool call as literal
+    text and Groq rejects it as the first chunk of the stream.
+
+    It is a bare APIError, not an APIStatusError, so pydantic-ai neither maps it to
+    ModelHTTPError nor gets to apply its own `tool_use_failed` recovery -- it reaches the
+    runner as-is. See _RETRYABLE_MODEL_ERRORS in app/core/ai_agents/runner.py.
+    """
+    return GroqAPIError(
+        "Failed to call a function. Please adjust your prompt. See 'failed_generation' for more details.",
+        httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions"),
+        body={
+            "message": "Failed to call a function. Please adjust your prompt. "
+            "See 'failed_generation' for more details.",
+            "type": "invalid_request_error",
+            "code": "tool_use_failed",
+            "failed_generation": '<function=list_my_recent_orders {"limit": 5} </function>',
+            "status_code": 400,
+        },
+    )
+
+
+def test_stream_agent_chat_retries_after_bare_groq_api_error(monkeypatch):
+    saved = _patch_append_turn(monkeypatch)
+    ctx = _make_ctx(_FakeAgent([_groq_tool_use_failed_error(), "It worked."]))
+
+    events = _run(ctx)
+
+    assert [e["type"] for e in events] == ["delta", "done"]
+    assert events[0]["text"] == "It worked."
+    assert saved == ["It worked."]
+
+
+def test_stream_agent_chat_never_leaks_provider_error_text(monkeypatch):
+    """A customer should never see Groq's raw 'failed_generation' wording in the widget."""
+    _patch_append_turn(monkeypatch)
+    outcomes = [_groq_tool_use_failed_error()] * (settings.AI_MODEL_RETRY_ATTEMPTS + 1)
+    ctx = _make_ctx(_FakeAgent(outcomes))
+
+    events = _run(ctx)
+
+    assert [e["type"] for e in events] == ["error"]
+    assert "failed_generation" not in events[0]["message"]
+
+
+def test_stream_agent_chat_hides_unexpected_error_details(monkeypatch):
+    _patch_append_turn(monkeypatch)
+    ctx = _make_ctx(_FakeAgent([RuntimeError("psycopg2: connection to 10.0.0.4 refused")]))
+
+    events = _run(ctx)
+
+    assert [e["type"] for e in events] == ["error"]
+    assert "psycopg2" not in events[0]["message"]
 
 
 def test_stream_agent_chat_gives_up_after_exhausting_retries(monkeypatch):

@@ -17,6 +17,10 @@ Customers can only see their own orders — if a lookup comes back "not found fo
 account", tell them exactly that rather than guessing why. Admins can look up any order.
 Use get_order_status for an order id, track_shipment for a shipment tracking number, and
 list_my_recent_orders when someone doesn't have an id/tracking number handy.
+
+Only state order details a tool actually returned. Never invent or guess an order id,
+status, delivery date or tracking number, and don't fill in a field the tool left empty —
+say that detail isn't available yet instead.
 """
 
 agent = Agent(deps_type=AgentDeps)
@@ -49,6 +53,14 @@ class OrderSummary(BaseModel):
     order_id: int
     status: str
     total_amount: str
+
+
+class RecentOrdersResult(BaseModel):
+    """Wraps the list so an empty result carries an explicit statement rather than being a
+    bare `[]`, which models tend to paper over by inventing plausible-looking orders."""
+
+    orders: list[OrderSummary]
+    message: Optional[str] = None
 
 
 def _owns_order(ctx: RunContext[AgentDeps], order_user_id: int) -> bool:
@@ -102,7 +114,7 @@ def track_shipment(ctx: RunContext[AgentDeps], tracking_id: str) -> ShipmentLook
 
 
 @agent.tool
-def list_my_recent_orders(ctx: RunContext[AgentDeps], limit: int = 5) -> list[OrderSummary]:
+def list_my_recent_orders(ctx: RunContext[AgentDeps], limit: int = 5) -> RecentOrdersResult:
     """List recent orders when the user doesn't have an order id or tracking number handy."""
     capped_limit = min(limit, _MAX_RECENT_ORDERS)
     with tool_db_session() as db:
@@ -111,10 +123,13 @@ def list_my_recent_orders(ctx: RunContext[AgentDeps], limit: int = 5) -> list[Or
             user_id=None if ctx.deps.current_user.is_admin else ctx.deps.current_user.id,
             limit=capped_limit,
         )
-        return [
+        orders = [
             OrderSummary(order_id=o.id, status=o.status.value if o.status else "", total_amount=f"{o.total_amount:.2f}")
             for o in result["data"]
         ]
+        if not orders:
+            return RecentOrdersResult(orders=[], message="This account has no orders yet.")
+        return RecentOrdersResult(orders=orders)
 
 
 register_agent(

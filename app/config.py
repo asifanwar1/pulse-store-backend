@@ -40,7 +40,14 @@ class Settings(BaseSettings):
 
     # AI Agents
     AI_AGENTS_ENABLED: bool = True
-    AI_DEFAULT_MODEL: str = "groq:llama-3.3-70b-versatile"
+    AI_DEFAULT_MODEL: str = "groq:openai/gpt-oss-20b"
+    """Must be a model with reliable structured tool calling -- every agent is tool-driven.
+
+    Not llama-3.3-70b-versatile: measured over 22 order_tracking runs it emitted its tool
+    call as literal text (`<function=list_my_recent_orders {"limit": 5}</function>`) instead
+    of a structured call in ~55% of them (5 of 6 on "when will I receive my order?"), which
+    Groq rejects outright with `code: tool_use_failed`. gpt-oss-20b handled the same prompt
+    cleanly in 14 of 14 runs, including chaining list_my_recent_orders -> get_order_status."""
     GROQ_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""

@@ -18,7 +18,7 @@ from app.features.orders.schemas import (
 )
 from app.features.products.models import Product
 from app.features.users.models import User
-from app.core.exceptions import NotFoundException, ConflictException
+from app.core.exceptions import BadRequestException, NotFoundException, ConflictException
 from app.core.money import to_decimal
 from app.core.utils import calculate_percentage_change
 
@@ -28,6 +28,9 @@ DEFAULT_SHIPPING_FEE = Decimal("5.99")
 ORDER_SETTINGS_ID = 1
 
 TERMINAL_ORDER_STATUSES = (OrderStatus.DELIVERED, OrderStatus.CANCELLED)
+
+DIRECT_STATUS_UPDATE_ALLOWED = (
+    OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CANCELLED)
 
 
 SORTABLE_ORDER_COLUMNS = {
@@ -54,13 +57,7 @@ def apply_order_status(
     changed_by_user_id: Optional[int] = None,
     force: bool = False,
 ) -> bool:
-    """Set an order's status and append a tracking entry when it changes.
 
-    No-op transitions are ignored (so a status that is re-applied does not
-    create duplicate timeline rows) unless ``force`` is set, which is used to
-    record the initial entry when an order is created. Returns whether an entry
-    was recorded. The caller is responsible for committing the session.
-    """
     if not force and order.status == status:
         return False
     if not force and order.status in TERMINAL_ORDER_STATUSES:
@@ -127,9 +124,9 @@ def get_orders_analytics(db: Session) -> OrderAnalyticsResponse:
         sum(1 for order in previous_orders if order.status == OrderStatus.PENDING))
 
     current_shipped = Decimal(
-        sum(1 for order in orders if order.status == OrderStatus.SHIPPED))
+        sum(1 for order in orders if order.status == OrderStatus.SHIPPING))
     previous_shipped = Decimal(
-        sum(1 for order in previous_orders if order.status == OrderStatus.SHIPPED))
+        sum(1 for order in previous_orders if order.status == OrderStatus.SHIPPING))
 
     current_revenue = sum(
         (to_decimal(order.total_amount)
@@ -306,6 +303,17 @@ def update_order_status(
     actor_user_id: Optional[int] = None,
 ) -> Order:
     order = get_order_by_id(db, order_id)
+
+    if order.shipments:
+        raise ConflictException(
+            "This order is tracked by a shipment; update its status from the shipment instead."
+        )
+    if status_in.status not in DIRECT_STATUS_UPDATE_ALLOWED:
+        raise BadRequestException(
+            "Create a shipment to move this order into shipping -- its status will follow "
+            "the shipment from there."
+        )
+
     status_changed = apply_order_status(
         order, status_in.status, changed_by_user_id=actor_user_id)
     db.commit()

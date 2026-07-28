@@ -173,6 +173,138 @@ def test_shipment_update_cannot_change_status_of_terminal_order(client, make_pro
     assert shipment_resp.status_code == 409
 
 
+def _create_order(client, auth_headers, user, product, quantity=1):
+    create_resp = client.post(
+        "/api/v1/orders/",
+        json={
+            "user_id": user.id,
+            "items": [{"product_id": product.id, "quantity": quantity}],
+            "payment_method": "COD",
+        },
+        headers=auth_headers(user),
+    )
+    assert create_resp.status_code == 201
+    return create_resp.json()["id"]
+
+
+def test_order_status_endpoint_rejects_direct_shipping_transition(client, make_product, make_user, auth_headers):
+    """Regression test: an order can no longer become SHIPPING (or SHIPPED/DELIVERED)
+    without a Shipment row backing it -- that used to leave it invisible in the
+    shipment listing forever. Moving into shipping now requires create_shipment."""
+    product = make_product(sku="NO-DIRECT-SHIP-1", stock_quantity=5)
+    user = make_user("no-direct-ship-buyer@example.com")
+    admin = make_user("no-direct-ship-admin@example.com", user_type=UserType.ADMIN.value)
+    order_id = _create_order(client, auth_headers, user, product)
+
+    for status in ("SHIPPING", "SHIPPED", "DELIVERED"):
+        resp = client.patch(
+            f"/api/v1/orders/{order_id}/status",
+            json={"status": status},
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 400, status
+
+
+def test_creating_shipment_makes_order_visible_in_shipment_listing(client, make_product, make_user, auth_headers):
+    """The originally reported bug: an order in a shipping state must show up in the
+    shipment listing and detail view. Since SHIPPING is now only reachable by creating
+    a shipment, this holds for every order that reaches it."""
+    product = make_product(sku="VISIBLE-SHIP-1", stock_quantity=5)
+    user = make_user("visible-ship-buyer@example.com")
+    admin = make_user("visible-ship-admin@example.com", user_type=UserType.ADMIN.value)
+    order_id = _create_order(client, auth_headers, user, product)
+
+    shipment_resp = client.post(
+        "/api/v1/shipments/",
+        json={
+            "order_id": order_id,
+            "tracking_id": "TRACK-VISIBLE-1",
+            "shipment_method": "STANDARD",
+            "courier": "Test Courier",
+            "status": "PENDING",
+        },
+        headers=auth_headers(admin),
+    )
+    assert shipment_resp.status_code == 201
+    shipment_id = shipment_resp.json()["id"]
+
+    order_resp = client.get(f"/api/v1/orders/{order_id}", headers=auth_headers(admin))
+    assert order_resp.json()["status"] == "SHIPPING"
+
+    listing_resp = client.get(
+        "/api/v1/shipments/", params={"order_id": order_id}, headers=auth_headers(admin)
+    )
+    assert listing_resp.status_code == 200
+    listed_ids = [row["id"] for row in listing_resp.json()["data"]]
+    assert shipment_id in listed_ids
+
+    detail_resp = client.get(f"/api/v1/shipments/{shipment_id}", headers=auth_headers(admin))
+    assert detail_resp.status_code == 200
+    assert detail_resp.json()["order_id"] == order_id
+
+
+def test_order_status_endpoint_blocked_once_shipment_exists(client, make_product, make_user, auth_headers):
+    """Once a shipment exists, all further progress must go through the shipment
+    endpoints so order/shipment status can never drift apart again."""
+    product = make_product(sku="LOCKED-SHIP-1", stock_quantity=5)
+    user = make_user("locked-ship-buyer@example.com")
+    admin = make_user("locked-ship-admin@example.com", user_type=UserType.ADMIN.value)
+    order_id = _create_order(client, auth_headers, user, product)
+
+    shipment_resp = client.post(
+        "/api/v1/shipments/",
+        json={
+            "order_id": order_id,
+            "tracking_id": "TRACK-LOCKED-1",
+            "shipment_method": "STANDARD",
+            "courier": "Test Courier",
+            "status": "PENDING",
+        },
+        headers=auth_headers(admin),
+    )
+    assert shipment_resp.status_code == 201
+
+    resp = client.patch(
+        f"/api/v1/orders/{order_id}/status",
+        json={"status": "CANCELLED"},
+        headers=auth_headers(admin),
+    )
+    assert resp.status_code == 409
+
+
+def test_shipment_progression_to_delivered_updates_order(client, make_product, make_user, auth_headers):
+    """From the shipment, status can be advanced all the way to DELIVERED, and the
+    parent order follows it."""
+    product = make_product(sku="PROGRESS-SHIP-1", stock_quantity=5)
+    user = make_user("progress-ship-buyer@example.com")
+    admin = make_user("progress-ship-admin@example.com", user_type=UserType.ADMIN.value)
+    order_id = _create_order(client, auth_headers, user, product)
+
+    shipment_resp = client.post(
+        "/api/v1/shipments/",
+        json={
+            "order_id": order_id,
+            "tracking_id": "TRACK-PROGRESS-1",
+            "shipment_method": "STANDARD",
+            "courier": "Test Courier",
+            "status": "PENDING",
+        },
+        headers=auth_headers(admin),
+    )
+    shipment_id = shipment_resp.json()["id"]
+
+    for status in ("SHIPPED", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED"):
+        resp = client.patch(
+            f"/api/v1/shipments/{shipment_id}/status",
+            json={"status": status},
+            headers=auth_headers(admin),
+        )
+        assert resp.status_code == 200, status
+
+    order_resp = client.get(f"/api/v1/orders/{order_id}", headers=auth_headers(admin))
+    assert order_resp.json()["status"] == "DELIVERED"
+
+
 def test_concurrent_orders_cannot_oversell_stock():
     """Regression test for the stock race condition: two simultaneous orders
     for the last unit of stock must not both succeed."""
