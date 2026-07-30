@@ -172,6 +172,10 @@ class ProductReviewsResponse(BaseModel):
         return f"{value:.2f}"
 
 
+class ProductReviewEligibilityResponse(BaseModel):
+    can_review: bool
+
+
 class CategoryNewProductsItem(BaseModel):
     id: int
     name: str

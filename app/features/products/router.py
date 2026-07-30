@@ -12,6 +12,7 @@ from app.features.products.schemas import (
     ProductMonthlySalesResponse,
     ProductResponse,
     ProductReviewCreate,
+    ProductReviewEligibilityResponse,
     ProductReviewResponse,
     ProductReviewsResponse,
     ProductSortDirection,
@@ -78,6 +79,17 @@ def get_product_monthly_sales(product_id: int, db: Session = Depends(get_db)):
 @router.get("/{product_id}/customer-reviews", response_model=ProductReviewsResponse)
 def get_product_customer_reviews(product_id: int, db: Session = Depends(get_db)):
     return service.get_product_customer_reviews(db, product_id)
+
+
+@router.get("/{product_id}/review-eligibility", response_model=ProductReviewEligibilityResponse)
+def get_product_review_eligibility(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return ProductReviewEligibilityResponse(
+        can_review=service.can_review_product(db, product_id, current_user.id)
+    )
 
 
 @router.post("/{product_id}/reviews", response_model=ProductReviewResponse)

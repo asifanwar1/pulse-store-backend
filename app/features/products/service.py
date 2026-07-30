@@ -291,10 +291,8 @@ def recalculate_product_rating(db: Session, product_id: int) -> None:
     db.commit()
 
 
-def create_or_update_product_review(db: Session, product_id: int, user_id: int, review_in: ProductReviewCreate) -> ProductReviewResponse:
-    get_product_by_id(db, product_id)
-
-    has_delivered_order = (
+def can_review_product(db: Session, product_id: int, user_id: int) -> bool:
+    return (
         db.query(OrderItem)
         .join(Order, Order.id == OrderItem.order_id)
         .filter(
@@ -305,7 +303,12 @@ def create_or_update_product_review(db: Session, product_id: int, user_id: int, 
         .first()
         is not None
     )
-    if not has_delivered_order:
+
+
+def create_or_update_product_review(db: Session, product_id: int, user_id: int, review_in: ProductReviewCreate) -> ProductReviewResponse:
+    get_product_by_id(db, product_id)
+
+    if not can_review_product(db, product_id, user_id):
         raise ForbiddenException("You can only review products from a delivered order")
 
     review = (
