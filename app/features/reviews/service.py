@@ -8,6 +8,8 @@ from app.core.utils import calculate_percentage_change
 from app.features.products.models import ProductReview
 from app.features.products import service as products_service
 from app.features.reviews.schemas import (
+    MyReviewListResponse,
+    MyReviewResponse,
     ReviewAnalyticsMetric,
     ReviewAnalyticsResponse,
     ReviewListResponse,
@@ -29,6 +31,29 @@ def _to_review_response(review: ProductReview) -> ReviewResponse:
         created_at=review.created_at,
         updated_at=review.updated_at,
     )
+
+
+def get_my_reviews(db: Session, user_id: int) -> MyReviewListResponse:
+    reviews = (
+        db.query(ProductReview)
+        .filter(ProductReview.user_id == user_id)
+        .order_by(ProductReview.created_at.desc())
+        .all()
+    )
+
+    data = [
+        MyReviewResponse(
+            id=review.id,
+            product_id=review.product_id,
+            product_name=review.product.name,
+            rating=review.rating,
+            comment=review.comment,
+            created_at=review.created_at,
+            updated_at=review.updated_at,
+        )
+        for review in reviews
+    ]
+    return MyReviewListResponse(data=data, count=len(data))
 
 
 def get_reviews(

@@ -26,6 +26,21 @@ class ReviewVisibilityUpdate(BaseModel):
     is_hidden: bool = Field(...)
 
 
+class MyReviewResponse(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    rating: int
+    comment: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class MyReviewListResponse(BaseModel):
+    data: list[MyReviewResponse]
+    count: int
+
+
 class ReviewAnalyticsMetric(BaseModel):
     value: int
     change_percentage: Decimal

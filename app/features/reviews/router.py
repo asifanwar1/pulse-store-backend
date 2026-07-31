@@ -4,14 +4,21 @@ from sqlalchemy.orm import Session
 from app.dependencies import get_db
 from app.features.reviews import service
 from app.features.reviews.schemas import (
+    MyReviewListResponse,
     ReviewAnalyticsResponse,
     ReviewListResponse,
     ReviewResponse,
     ReviewVisibilityUpdate,
 )
-from app.features.auth.dependencies import get_current_admin_user
+from app.features.auth.dependencies import get_current_admin_user, get_current_user
+from app.features.users.models import User
 
 router = APIRouter()
+
+
+@router.get("/me", response_model=MyReviewListResponse)
+def get_my_reviews(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return service.get_my_reviews(db, current_user.id)
 
 
 @router.get("/analytics", response_model=ReviewAnalyticsResponse)
