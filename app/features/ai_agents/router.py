@@ -74,6 +74,19 @@ def get_tickets_analytics(db: Session = Depends(get_db), _=Depends(get_current_a
     return service.get_tickets_analytics(db)
 
 
+@router.get("/tickets/mine", response_model=SupportTicketListResponse)
+def list_my_support_tickets(
+    is_resolved: Optional[bool] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return service.list_support_tickets(
+        db, is_resolved=is_resolved, page=page, limit=limit, user_id=current_user.id
+    )
+
+
 @router.get("/tickets", response_model=SupportTicketListResponse)
 def list_support_tickets(
     is_resolved: Optional[bool] = Query(None),

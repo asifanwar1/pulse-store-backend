@@ -132,10 +132,14 @@ def create_support_ticket(db: Session, conversation_id: int, user_id: int, subje
     return ticket
 
 
-def list_support_tickets(db: Session, is_resolved: Optional[bool], page: int, limit: int) -> dict:
+def list_support_tickets(
+    db: Session, is_resolved: Optional[bool], page: int, limit: int, user_id: Optional[int] = None
+) -> dict:
     query = db.query(SupportTicket)
     if is_resolved is not None:
         query = query.filter(SupportTicket.is_resolved.is_(is_resolved))
+    if user_id is not None:
+        query = query.filter(SupportTicket.user_id == user_id)
 
     total_count = query.count()
     offset = (page - 1) * limit
